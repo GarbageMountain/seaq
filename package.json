@@ -1,0 +1,37 @@
+{
+  "name": "seaq",
+  "version": "1.0.0",
+  "description": "ES6 Text Search.",
+  "main": "lib/index.js",
+  "types": "declarations/index.d.ts",
+  "scripts": {
+    "test": "ava",
+    "compile": "node_modules/typescript/bin/tsc -p '.'",
+    "compile-watch": "node_modules/typescript/bin/tsc -p '.' -w",
+    "clean-code": "rm -rf lib/* declarations/*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stephenlaughton/seaq.git"
+  },
+  "keywords": [
+    "search",
+    "string_score",
+    "fuzzy"
+  ],
+  "author": "Stephen Laughton",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/stephenlaughton/seaq/issues"
+  },
+  "homepage": "https://github.com/stephenlaughton/seaq#readme",
+  "devDependencies": {
+    "@types/faker": "^3.1.32",
+    "@types/node": "^6.0.52",
+    "ava": "^0.17.0",
+    "babel-cli": "^6.18.0",
+    "babel-preset-latest": "^6.16.0",
+    "faker": "^3.1.0",
+    "typescript": "^2.1.4"
+  }
+}
