@@ -71,7 +71,7 @@ export function getSortedList<T>(list: MetaDataItem<T>[]) {
   });
 }
 
-export function getProperty<T>(obj: T, key: string): any {
+export function getProperty<T>(obj: T, key: string): keyof T | string {
   const dotIndex = key.indexOf('.');
   // console.log(key);
   if (dotIndex >= 0) {
