@@ -6,8 +6,12 @@
  */
 import { string_score } from './Scorer';
 
-export function seaq<T, K extends keyof T>(list: T[], query: string, keys: K[], fuzzy?: number) {
-
+export function seaq<T, K extends keyof T>(
+  list: T[],
+  query: string,
+  keys: (K | string)[],
+  fuzzy?: number
+) {
   // const cache: { [id: string]: number } = {};
   const metaDataList = getMetaDataList(list, query, keys, fuzzy);
   const sortedList = getSortedList(metaDataList);
@@ -18,7 +22,12 @@ export function seaq<T, K extends keyof T>(list: T[], query: string, keys: K[], 
   return rawList;
 }
 
-function getMetaDataList<T>(list: T[], query: string, keys: string[], fuzzy?:number): MetaDataItem<T>[] {
+function getMetaDataList<T>(
+  list: T[],
+  query: string,
+  keys: string[],
+  fuzzy?: number
+): MetaDataItem<T>[] {
   const fullList = list.map(item => {
     // const keyScores = keys.map(key => {
     //   const value = getProperty(item, key);
@@ -46,7 +55,7 @@ function getMetaDataList<T>(list: T[], query: string, keys: string[], fuzzy?:num
     return {
       item: item,
       // scores: keyScores,
-      score: score,
+      score: score
     };
   });
 
@@ -84,4 +93,3 @@ export function getProperty<T>(obj: T, key: string): keyof T | string {
   }
   return obj[key];
 }
-
