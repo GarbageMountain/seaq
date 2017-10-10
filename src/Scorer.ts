@@ -30,7 +30,7 @@ export function string_score(target: string, query: string, fuzziness?: number):
   let idxOf;
   let startAt = 0;
   let fuzzies = 1;
-  let fuzzyFactor;
+  let fuzzyFactor = 0;
   let i;
 
   // Cache fuzzyFactor for speed increase

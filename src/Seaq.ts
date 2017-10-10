@@ -9,78 +9,55 @@ import { string_score } from './Scorer';
 export function seaq<T, K extends keyof T>(
   list: T[],
   query: string,
-  keys: (K | string)[],
+  keys?: (K | string)[],
   fuzzy?: number
 ) {
-  // const cache: { [id: string]: number } = {};
-  const metaDataList = getMetaDataList(list, query, keys, fuzzy);
-  const sortedList = getSortedList(metaDataList);
-  const rawList = sortedList.map(item => {
-    return item.item;
-  });
-
-  return rawList;
+  return getMetaDataList(list, query, keys, fuzzy)
+    .sort((a, b) => b.score - a.score)
+    .map(item => item.item);
 }
 
 function getMetaDataList<T>(
   list: T[],
   query: string,
-  keys: string[],
+  keys?: string[],
   fuzzy?: number
 ): MetaDataItem<T>[] {
+  // get a list of all items whose score is > 0
   const fullList = list.map(item => {
-    // const keyScores = keys.map(key => {
-    //   const value = getProperty(item, key);
-    //   let score = 0;
-    //   if (typeof value === 'string') {
-    //     score = string_score(value, query, fuzzy);
-    //   }
-    //   return {
-    //     key: key,
-    //     score: score,
-    //   }
-    // });
+    // get a string representation of all keys joined with ' ' or if no keys, the item stringified
+    const searchString: string = keys
+      ? keys
+          .map(key => {
+            const value = getProperty(item, key);
+            if (typeof value === 'string') {
+              return value;
+            }
+            return;
+          })
+          .join(' ')
+      : item.toString();
 
-    const keyValues = keys.map(key => {
-      const value = getProperty(item, key);
-      if (typeof value === 'string') {
-        return value;
-      }
-      return;
-    });
+    // calculate match score
+    const score = string_score(searchString, query, fuzzy);
 
-    const allKeys = keyValues.join(' ');
-    const score = string_score(allKeys, query, fuzzy);
-
+    // return original item and its matching score
     return {
       item: item,
-      // scores: keyScores,
       score: score
     };
   });
 
+  // return only those items whose score is > 0
   return fullList.filter(item => item.score > 0);
 }
 
-export interface MetaDataItem<T> {
+interface MetaDataItem<T> {
   item: T;
-  // scores: { key: string, score: number }[];
   score: number;
 }
 
-export function getSortedList<T>(list: MetaDataItem<T>[]) {
-  return list.sort((a, b) => {
-    if (a.score > b.score) {
-      return -1;
-    }
-    if (a.score < b.score) {
-      return 1;
-    }
-    return 0;
-  });
-}
-
-export function getProperty<T>(obj: T, key: string): keyof T | string {
+function getProperty<T>(obj: T, key: string): keyof T | string {
   const dotIndex = key.indexOf('.');
   // console.log(key);
   if (dotIndex >= 0) {
