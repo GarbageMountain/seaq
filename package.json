@@ -1,6 +1,6 @@
 {
   "name": "seaq",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "ES6 Text Search.",
   "main": "lib/index.js",
   "types": "declarations/index.d.ts",
