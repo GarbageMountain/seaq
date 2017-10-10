@@ -20,18 +20,18 @@ export function string_score(target: string, query: string, fuzziness?: number):
   }
 
   let runningScore = 0;
-  let charScore;
-  let finalScore;
+  let charScore: number;
+  let finalScore: number;
   let string = target;
   let lString = string.toLowerCase();
   let strLength = string.length;
   let lWord = query.toLowerCase();
   let wordLength = query.length;
-  let idxOf;
+  let idxOf: number;
   let startAt = 0;
   let fuzzies = 1;
   let fuzzyFactor = 0;
-  let i;
+  let i: number;
 
   // Cache fuzzyFactor for speed increase
   if (fuzziness) {
