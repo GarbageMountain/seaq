@@ -29,11 +29,8 @@ function getMetaDataList<T>(
     const searchString: string = keys
       ? keys
           .map(key => {
-            const value = getProperty(item, key);
-            if (typeof value === 'string') {
-              return value;
-            }
-            return;
+            const value = getProperty(item, key).join(' ');
+            return value;
           })
           .join(' ')
       : item.toString();
@@ -57,16 +54,36 @@ interface MetaDataItem<T> {
   score: number;
 }
 
-function getProperty<T>(obj: T, key: string): keyof T | string {
-  const dotIndex = key.indexOf('.');
-  // console.log(key);
-  if (dotIndex >= 0) {
-    const objKey = key.substring(0, dotIndex);
-    // console.log(objKey);
-    const childKey = key.substring(dotIndex + 1);
-    // console.log(childKey);
-    const newObj = obj[objKey];
-    return getProperty(newObj, childKey);
+function getProperty<T>(obj: T, path: string | null, list: string[] = []): string[] {
+  if (!path) {
+    // If there's no path left, we've gotten to the object we care about.
+    list.push(obj.toString());
+  } else {
+    const dotIndex = path.indexOf('.');
+    let firstSegment = path;
+    let remaining = null;
+
+    if (dotIndex !== -1) {
+      firstSegment = path.slice(0, dotIndex);
+      remaining = path.slice(dotIndex + 1);
+    }
+
+    const value = obj[firstSegment];
+
+    if (value !== null && value !== undefined) {
+      if (!remaining && (typeof value === 'string' || typeof value === 'number')) {
+        list.push(value.toString());
+      } else if (Array.isArray(value)) {
+        // Search each item in the array.
+        for (let i = 0, len = value.length; i < len; i += 1) {
+          getProperty(value[i], remaining, list);
+        }
+      } else if (remaining) {
+        // An object. Recurse further.
+        getProperty(value, remaining, list);
+      }
+    }
   }
-  return obj[key];
+
+  return list;
 }
