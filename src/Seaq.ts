@@ -9,7 +9,7 @@ import { string_score } from './Scorer';
 export function seaq<T, K extends keyof T>(
   list: T[],
   query: string,
-  keys?: (K | string)[],
+  keys?: Array<K | string>,
   fuzzy?: number
 ) {
   return getMetaDataList(list, query, keys, fuzzy)
@@ -22,7 +22,7 @@ function getMetaDataList<T>(
   query: string,
   keys?: string[],
   fuzzy?: number
-): MetaDataItem<T>[] {
+): Array<MetaDataItem<T>> {
   // get a list of all items whose score is > 0
   const fullList = list.map(item => {
     // get a string representation of all keys joined with ' ' or if no keys, the item stringified
@@ -40,8 +40,8 @@ function getMetaDataList<T>(
 
     // return original item and its matching score
     return {
-      item: item,
-      score: score
+      item,
+      score
     };
   });
 

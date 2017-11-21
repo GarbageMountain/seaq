@@ -14,7 +14,7 @@ export function string_score(target: string, query: string, fuzziness?: number):
     return 1;
   }
 
-  //if it's not a perfect match and is empty return 0
+  // if it's not a perfect match and is empty return 0
   if (query === '') {
     return 0;
   }
@@ -22,11 +22,11 @@ export function string_score(target: string, query: string, fuzziness?: number):
   let runningScore = 0;
   let charScore: number;
   let finalScore: number;
-  let string = target;
-  let lString = string.toLowerCase();
-  let strLength = string.length;
-  let lWord = query.toLowerCase();
-  let wordLength = query.length;
+  const rawString = target;
+  const lString = rawString.toLowerCase();
+  const strLength = rawString.length;
+  const lWord = query.toLowerCase();
+  const wordLength = query.length;
   let idxOf: number;
   let startAt = 0;
   let fuzzies = 1;
@@ -57,13 +57,13 @@ export function string_score(target: string, query: string, fuzziness?: number):
           // Acronym Bonus
           // Weighing Logic: Typing the first character of an acronym is as if you
           // preceded it with two perfect character matches.
-          if (string[idxOf - 1] === ' ') {
+          if (rawString[idxOf - 1] === ' ') {
             charScore += 0.8;
           }
         }
 
         // Same case bonus.
-        if (string[idxOf] === query[i]) {
+        if (rawString[idxOf] === query[i]) {
           charScore += 0.1;
         }
 
@@ -83,11 +83,11 @@ export function string_score(target: string, query: string, fuzziness?: number):
         charScore = 0.7;
       } else {
         charScore = 0.1;
-        if (string[idxOf - 1] === ' ') {
+        if (rawString[idxOf - 1] === ' ') {
           charScore += 0.8;
         }
       }
-      if (string[idxOf] === query[i]) {
+      if (rawString[idxOf] === query[i]) {
         charScore += 0.1;
       }
       runningScore += charScore;

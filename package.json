@@ -26,12 +26,17 @@
   },
   "homepage": "https://github.com/stephenlaughton/seaq#readme",
   "devDependencies": {
-    "@types/faker": "^4.1.0",
-    "@types/node": "^7.0.18",
-    "ava": "^0.19.1",
-    "babel-cli": "^6.18.0",
-    "babel-preset-latest": "^6.16.0",
+    "@types/faker": "^4.1.2",
+    "@types/jest": "^21.1.6",
+    "@types/node": "^8.0.53",
+    "babel-cli": "^6.26.0",
+    "babel-preset-latest": "^6.24.1",
     "faker": "^4.1.0",
-    "typescript": "^2.1.4"
+    "jest": "^21.2.1",
+    "ts-jest": "^21.2.3",
+    "tslint": "^5.8.0",
+    "tslint-config-prettier": "^1.6.0",
+    "tslint-eslint-rules": "^4.1.1",
+    "typescript": "^2.6.1"
   }
 }
