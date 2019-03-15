@@ -1,1 +1,1 @@
-export declare function seaq<T, K extends keyof T>(list: T[], query: string, keys?: (K | string)[], fuzzy?: number): T[];
+export declare function seaq<T>(list: T[], query: string, keys: Array<Extract<keyof T, string>> | string[], fuzzy?: number): T[];

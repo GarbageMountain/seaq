@@ -6,21 +6,22 @@
  */
 import { string_score } from './Scorer';
 
-export function seaq<T, K extends keyof T>(
+export function seaq<T>(
   list: T[],
   query: string,
-  keys?: Array<K | string>,
+  keys: Array<Extract<keyof T, string>> | string[],
   fuzzy?: number
 ) {
-  return getMetaDataList(list, query, keys, fuzzy)
-    .sort((a, b) => b.score - a.score)
-    .map(item => item.item);
+  const l = getMetaDataList(list, query, keys, fuzzy);
+  return l
+    .sort((a: MetaDataItem<T>, b: MetaDataItem<T>) => b.score - a.score)
+    .map((item: MetaDataItem<T>) => item.item);
 }
 
 function getMetaDataList<T>(
   list: T[],
   query: string,
-  keys?: string[],
+  keys: string[],
   fuzzy?: number
 ): Array<MetaDataItem<T>> {
   // get a list of all items whose score is > 0
@@ -29,8 +30,10 @@ function getMetaDataList<T>(
     const searchString: string = keys
       ? keys
           .map(key => {
-            const value = getProperty(item, key).join(' ');
-            return value;
+            if (typeof key === 'string') {
+              const value = getProperty(item, key).join(' ');
+              return value;
+            }
           })
           .join(' ')
       : item.toString();
