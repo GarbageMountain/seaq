@@ -1,4 +1,4 @@
-import { seaq } from '../src/Seaq';
+import { seaq } from '../src';
 import { Contacts } from './Contacts';
 
 test('getProperty', () => {
@@ -8,10 +8,13 @@ test('getProperty', () => {
 });
 
 test('getProperty', () => {
-  const searchResults = seaq(Contacts, 'Nathaniel', [
-    'givenName',
-    'familyName',
-  ]);
+  const searchResults = seaq(Contacts, 'Natniel', ['givenName'], 0.5);
+  expect(searchResults).toHaveLength(99);
+  expect(searchResults[0]).toMatchObject({ givenName: 'Nathaniel' });
+});
+
+test('getProperty', () => {
+  const searchResults = seaq(Contacts, 'Nathaniel', ['givenName']);
   expect(searchResults).toHaveLength(1);
   expect(searchResults[0]).toMatchObject({ givenName: 'Nathaniel' });
 });
