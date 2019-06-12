@@ -34,6 +34,7 @@ function getMetaDataList<T>(
               const value = getProperty(item, key).join(' ');
               return value;
             }
+            return;
           })
           .join(' ')
       : `${item}`;
@@ -57,7 +58,11 @@ interface MetaDataItem<T> {
   score: number;
 }
 
-function getProperty<T>(obj: T, path: string | null, list: string[] = []): string[] {
+function getProperty(
+  obj: any,
+  path: string | null,
+  list: string[] = [],
+): string[] {
   if (!path) {
     // If there's no path left, we've gotten to the object we care about.
     list.push(`${obj}`);
@@ -74,7 +79,10 @@ function getProperty<T>(obj: T, path: string | null, list: string[] = []): strin
     const value = obj[firstSegment];
 
     if (value !== null && value !== undefined) {
-      if (!remaining && (typeof value === 'string' || typeof value === 'number')) {
+      if (
+        !remaining &&
+        (typeof value === 'string' || typeof value === 'number')
+      ) {
         list.push(value.toString());
       } else if (Array.isArray(value)) {
         // Search each item in the array.
