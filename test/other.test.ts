@@ -7,6 +7,20 @@ test('getProperty', () => {
   expect(searchResults[0]).toMatchObject({ givenName: 'Nathaniel' });
 });
 
+// test('getProperty', () => {
+//   const searchResults = seaq(Contacts, 'Nathaniel', [
+//     'givenName',
+//     'familyName',
+//   ]);
+//   expect(searchResults).toHaveLength(1);
+//   expect(searchResults[0]).toMatchObject({ givenName: 'Nathaniel' });
+// });
+
+// test('getProperty', () => {
+//   const searchResults = seaq(Contacts, '', ['givenName', 'familyName']);
+//   expect(searchResults).toHaveLength(0);
+// });
+
 test('getOtherProperty', () => {
   const searchResults = seaq(Contacts, 'dwi', [
     'emailAddresses.email',
