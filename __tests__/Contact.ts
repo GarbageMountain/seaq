@@ -21,5 +21,5 @@ export interface Contact {
     yes: boolean;
     howMuch: number;
     why: string;
-  }
+  };
 }

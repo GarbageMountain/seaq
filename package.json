@@ -5,7 +5,7 @@
   "main": "lib/index.js",
   "types": "declarations/index.d.ts",
   "scripts": {
-    "test": "ava",
+    "test": "jest",
     "compile": "node_modules/typescript/bin/tsc -p '.'",
     "compile-watch": "node_modules/typescript/bin/tsc -p '.' -w",
     "clean-code": "rm -rf lib/* declarations/*"
@@ -26,6 +26,7 @@
   },
   "homepage": "https://github.com/stephenlaughton/seaq#readme",
   "devDependencies": {
+    "@babel/preset-typescript": "^7.3.3",
     "@types/faker": "^4.1.5",
     "@types/jest": "^24.0.13",
     "@types/node": "^12.0.8",
@@ -33,7 +34,6 @@
     "babel-preset-latest": "^6.24.1",
     "faker": "^4.1.0",
     "jest": "^24.8.0",
-    "ts-jest": "^24.0.2",
     "tslint": "^5.17.0",
     "tslint-config-prettier": "^1.18.0",
     "tslint-eslint-rules": "^5.4.0",

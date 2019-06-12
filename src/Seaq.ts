@@ -64,7 +64,7 @@ function getProperty<T>(obj: T, path: string | null, list: string[] = []): strin
   } else {
     const dotIndex = path.indexOf('.');
     let firstSegment = path;
-    let remaining = null;
+    let remaining: string | null = null;
 
     if (dotIndex !== -1) {
       firstSegment = path.slice(0, dotIndex);
