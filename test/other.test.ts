@@ -2,22 +2,24 @@ import { seaq } from '../src/Seaq';
 import { Contacts } from './Contacts';
 
 test('getProperty', () => {
-  const searchContacts = seaq(Contacts, 'nath ra', ['givenName', 'familyName']);
-  console.info(
-    searchContacts.map(
-      (contact) => contact.givenName + ' ' + contact.familyName,
-    ),
-  );
+  const searchResults = seaq(Contacts, 'nath ra', ['givenName', 'familyName']);
+  expect(searchResults).toHaveLength(1);
+  expect(searchResults[0]).toMatchObject({ givenName: 'Nathaniel' });
 });
 
 test('getOtherProperty', () => {
-  const searchContacts = seaq(Contacts, 'dwi', [
+  const searchResults = seaq(Contacts, 'dwi', [
     'emailAddresses.email',
     'phoneNumbers.number',
   ]);
-  console.info(
-    searchContacts.map(
-      (contact) => contact.givenName + ' ' + contact.familyName,
-    ),
-  );
+  expect(searchResults).toHaveLength(2);
+  expect(searchResults[0]).toMatchObject({
+    givenName: 'Caitlyn',
+    emailAddresses: [
+      {
+        email: 'Dwight_Walker9@gmail.com',
+        label: 'home',
+      },
+    ],
+  });
 });
