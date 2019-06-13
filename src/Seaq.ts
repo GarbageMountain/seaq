@@ -10,7 +10,7 @@ export function seaq<T>(
   list: T[],
   query: string,
   keys: Array<Extract<keyof T, string>> | string[],
-  fuzzy?: number
+  fuzzy?: number,
 ) {
   const l = getMetaDataList(list, query, keys, fuzzy);
   return l
@@ -22,21 +22,22 @@ function getMetaDataList<T>(
   list: T[],
   query: string,
   keys: string[],
-  fuzzy?: number
+  fuzzy?: number,
 ): Array<MetaDataItem<T>> {
   // get a list of all items whose score is > 0
-  const fullList = list.map(item => {
+  const fullList = list.map((item) => {
     // get a string representation of all keys joined with ' ' or if no keys, the item stringified
     const searchString: string = keys
       ? keys
-          .map(key => {
+          .map((key) => {
             if (typeof key === 'string') {
               const value = getProperty(item, key).join(' ');
               return value;
             }
+            return;
           })
           .join(' ')
-      : item.toString();
+      : `${item}`;
 
     // calculate match score
     const score = string_score(searchString, query, fuzzy);
@@ -44,12 +45,12 @@ function getMetaDataList<T>(
     // return original item and its matching score
     return {
       item,
-      score
+      score,
     };
   });
 
   // return only those items whose score is > 0
-  return fullList.filter(item => item.score > 0);
+  return fullList.filter((item) => item.score > 0);
 }
 
 interface MetaDataItem<T> {
@@ -57,14 +58,18 @@ interface MetaDataItem<T> {
   score: number;
 }
 
-function getProperty<T>(obj: T, path: string | null, list: string[] = []): string[] {
+function getProperty(
+  obj: any,
+  path: string | null,
+  list: string[] = [],
+): string[] {
   if (!path) {
     // If there's no path left, we've gotten to the object we care about.
-    list.push(obj.toString());
+    list.push(`${obj}`);
   } else {
     const dotIndex = path.indexOf('.');
     let firstSegment = path;
-    let remaining = null;
+    let remaining: string | null = null;
 
     if (dotIndex !== -1) {
       firstSegment = path.slice(0, dotIndex);
@@ -74,7 +79,10 @@ function getProperty<T>(obj: T, path: string | null, list: string[] = []): strin
     const value = obj[firstSegment];
 
     if (value !== null && value !== undefined) {
-      if (!remaining && (typeof value === 'string' || typeof value === 'number')) {
+      if (
+        !remaining &&
+        (typeof value === 'string' || typeof value === 'number')
+      ) {
         list.push(value.toString());
       } else if (Array.isArray(value)) {
         // Search each item in the array.

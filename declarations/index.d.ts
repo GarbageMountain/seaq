@@ -1,1 +1,0 @@
-export { seaq } from './Seaq';

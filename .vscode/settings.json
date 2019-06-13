@@ -1,8 +1,0 @@
-{
-  // Place your settings in this file to overwrite default and user settings.
-  "tslint.autoFixOnSave": true,
-  "editor.formatOnSave": true,
-  "prettier.singleQuote": true,
-  "prettier.printWidth": 100,
-  "prettier.jsxBracketSameLine": true
-}
