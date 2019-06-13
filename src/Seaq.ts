@@ -6,12 +6,25 @@
  */
 import { string_score } from './Scorer';
 
+/**
+ * Given an input list Array<T>, a set of object keys to search, and a search
+ * query, Seaq will return a new Array<T> containing the results ordered by
+ * their Score which is calculated using a variation of string_score algorithm.
+ *
+ * @export
+ * @template T generic
+ * @param {Array<T>} list list of objects or strings to search
+ * @param {string} query query string to match against keys in objects
+ * @param {(Array<Extract<keyof T, string>> | string[])} keys keys to search in the object
+ * @param {number} [fuzzy] fuzziness should be between 0 and 1. low fuzziness like 0.01 means a mismatch will drop the score more then a fuzziness of something like 0.9.
+ * @returns {Array<T>}
+ */
 export function seaq<T>(
   list: T[],
   query: string,
   keys: Array<Extract<keyof T, string>> | string[],
   fuzzy?: number,
-) {
+): Array<T> {
   const l = getMetaDataList(list, query, keys, fuzzy);
   return l
     .sort((a: MetaDataItem<T>, b: MetaDataItem<T>) => b.score - a.score)
