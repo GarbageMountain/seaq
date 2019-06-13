@@ -1,8 +1,5 @@
 /**
  * Seaq is a Fuzzy searching utility function.
- * Given an input Array<T>, a set of object keys to search, and a search
- * query, Seaq will return a new Array<T> containing the results ordered by
- * their Score which is calculated using a variation of string_score algorithm.
  */
 import { string_score } from './Scorer';
 
