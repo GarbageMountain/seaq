@@ -1,0 +1,11 @@
+// Place your settings in this file to overwrite default and user settings.
+{
+  "search.exclude": {
+    "**/node_modules": true
+  },
+  "files.exclude": {
+    "node_modules": false
+  },
+  "editor.formatOnSave": true,
+  "typescript.tsdk": "./node_modules/typescript/lib"
+}
