@@ -1,4 +1,24 @@
-export const Contacts = [
+export interface EmailField {
+  label: string;
+  email: string;
+}
+
+export interface PhoneNumberField {
+  label: string;
+  number: string;
+}
+
+export interface Contact {
+  recordID: number;
+  familyName: string;
+  givenName: string;
+  middleName: string;
+  emailAddresses: EmailField[];
+  phoneNumbers: PhoneNumberField[];
+  thumbnailPath: string;
+}
+
+export const Contacts: Contact[] = [
   {
     recordID: 0,
     familyName: 'Koch',

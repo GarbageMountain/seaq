@@ -1,4 +1,9 @@
-export const Books = [
+export interface Book {
+  title: string;
+  author: string;
+}
+
+export const Books: Book[] = [
   {
     title: 'The code of the wooster',
     author: 'aa',
