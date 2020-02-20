@@ -19,7 +19,7 @@ import { string_score } from './Scorer';
 export function seaq<T>(
   list: T[],
   query: string,
-  keys: Array<Extract<keyof T, string>> | string[],
+  keys?: Array<Extract<keyof T, string>> | string[],
   fuzzy?: number,
 ): Array<T> {
   const l = getMetaDataList(list, query, keys, fuzzy);
@@ -31,7 +31,7 @@ export function seaq<T>(
 function getMetaDataList<T>(
   list: T[],
   query: string,
-  keys: string[],
+  keys?: string[],
   fuzzy?: number,
 ): Array<MetaDataItem<T>> {
   // get a list of all items whose score is > 0
@@ -48,7 +48,6 @@ function getMetaDataList<T>(
           })
           .join(' ')
       : `${item}`;
-
     // calculate match score
     const score = string_score(searchString, query, fuzzy);
 
