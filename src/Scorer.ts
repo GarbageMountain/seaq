@@ -8,7 +8,11 @@
  * @param {number} [fuzziness]
  * @returns {number}
  */
-export function string_score(target: string, query: string, fuzziness?: number): number {
+export function string_score(
+  target: string,
+  query: string,
+  fuzziness?: number,
+): number {
   // If the string is equal to the word, perfect match.
   if (target === query) {
     return 1;
@@ -96,7 +100,8 @@ export function string_score(target: string, query: string, fuzziness?: number):
   }
 
   // Reduce penalty for longer strings.
-  finalScore = 0.5 * (runningScore / strLength + runningScore / wordLength) / fuzzies;
+  finalScore =
+    (0.5 * (runningScore / strLength + runningScore / wordLength)) / fuzzies;
 
   if (lWord[0] === lString[0] && finalScore < 0.85) {
     finalScore += 0.15;

@@ -1,5 +1,5 @@
 import { seaq } from '../src';
-import { Contacts } from './Contacts';
+import Contacts from './contacts.json';
 
 test('getProperty', () => {
   const searchResults = seaq(Contacts, 'nath ra', ['givenName', 'familyName']);
