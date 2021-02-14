@@ -44,7 +44,7 @@ function getMetaDataList<T>(
             return value;
           })
           .join(' ')
-      : `${item}`;
+      : JSON.stringify(item);
     // calculate match score
     const score = string_score(searchString, query, fuzzy);
 
@@ -64,14 +64,14 @@ interface MetaDataItem<T> {
   score: number;
 }
 
-function getProperty(
+export function getProperty(
   obj: any,
   path: string | null,
   list: string[] = [],
 ): string[] {
   if (!path) {
     // If there's no path left, we've gotten to the object we care about.
-    list.push(`${obj}`);
+    list.push(JSON.stringify(obj));
   } else {
     const dotIndex = path.indexOf('.');
     let firstSegment = path;
@@ -98,6 +98,8 @@ function getProperty(
       } else if (remaining) {
         // An object. Recurse further.
         getProperty(value, remaining, list);
+      } else {
+        getProperty(value, null, list);
       }
     }
   }

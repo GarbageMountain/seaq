@@ -78,22 +78,33 @@ export function string_score(
     }
   } else {
     for (i = 0; i < wordLength; i += 1) {
+      // Find next first case-insensitive match of a character.
       idxOf = lString.indexOf(lWord[i], startAt);
+
       if (-1 === idxOf) {
         return 0;
       }
 
       if (startAt === idxOf) {
+        // Consecutive letter & start-of-string Bonus
         charScore = 0.7;
       } else {
         charScore = 0.1;
+
+        // Acronym Bonus
+        // Weighing Logic: Typing the first character of an acronym is as if you
+        // preceded it with two perfect character matches.
         if (rawString[idxOf - 1] === ' ') {
           charScore += 0.8;
         }
       }
+
+      // Same case bonus.
       if (rawString[idxOf] === query[i]) {
         charScore += 0.1;
       }
+
+      // Update scores and startAt position for next round of indexOf
       runningScore += charScore;
       startAt = idxOf + 1;
     }

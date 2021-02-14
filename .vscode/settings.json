@@ -8,5 +8,6 @@
   },
   "editor.formatOnSave": true,
   "typescript.tsdk": "./node_modules/typescript/lib",
-  "jest.autoEnable": true
+  "jest.autoEnable": true,
+  "jest.enableCodeLens": true
 }
