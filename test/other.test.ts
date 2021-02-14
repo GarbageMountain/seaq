@@ -40,6 +40,7 @@ test('getOtherProperty', () => {
     ],
   });
 });
+
 test('no keys', () => {
   const searchResults = seaq(['whatever', 'thing'], 'th');
   expect(searchResults).toHaveLength(1);

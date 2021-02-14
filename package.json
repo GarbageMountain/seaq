@@ -1,20 +1,24 @@
 {
-  "name": "seaq",
   "version": "1.1.4",
   "description": "ES6 Text Search.",
+  "license": "MIT",
   "main": "dist/index.js",
-  "umd:main": "dist/seaq.umd.production.js",
-  "module": "dist/seaq.es.production.js",
   "typings": "dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
+  "engines": {
+    "node": ">=10"
+  },
   "scripts": {
     "start": "tsdx watch",
     "build": "tsdx build",
-    "test": "tsdx test --coverage",
-    "generate": "ts-node --project ./test.tsconfig.json ./test/Data.generator.ts",
-    "pre-commit": "pretty-quick"
+    "test": "tsdx test",
+    "lint": "tsdx lint",
+    "prepare": "tsdx build",
+    "size": "size-limit",
+    "analyze": "size-limit --why"
   },
   "repository": {
     "type": "git",
@@ -25,8 +29,6 @@
     "string_score",
     "fuzzy"
   ],
-  "author": "Stephen Laughton",
-  "license": "MIT",
   "bugs": {
     "url": "https://github.com/stephenlaughton/seaq/issues"
   },
@@ -34,18 +36,34 @@
   "peerDependencies": {},
   "husky": {
     "hooks": {
-      "pre-commit": "pretty-quick --staged"
+      "pre-commit": "tsdx lint"
     }
   },
+  "prettier": {
+    "printWidth": 80,
+    "semi": true,
+    "singleQuote": true,
+    "trailingComma": "all"
+  },
+  "name": "seaq",
+  "author": "Stephen Laughton",
+  "module": "dist/seaq.esm.js",
+  "size-limit": [
+    {
+      "path": "dist/seaq.cjs.production.min.js",
+      "limit": "10 KB"
+    },
+    {
+      "path": "dist/seaq.esm.js",
+      "limit": "10 KB"
+    }
+  ],
   "devDependencies": {
+    "@size-limit/preset-small-lib": "^4.9.2",
     "@types/faker": "^5.1.6",
-    "@types/jest": "^26.0.20",
     "faker": "^5.4.0",
     "husky": "^5.0.9",
-    "jest": "^26.6.3",
-    "prettier": "^2.2.1",
-    "pretty-quick": "^3.1.0",
-    "ts-node": "^9.1.1",
+    "size-limit": "^4.9.2",
     "tsdx": "^0.14.1",
     "tslib": "^2.1.0",
     "typescript": "^4.1.5"

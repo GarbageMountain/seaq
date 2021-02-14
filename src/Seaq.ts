@@ -35,16 +35,13 @@ function getMetaDataList<T>(
   fuzzy?: number,
 ): Array<MetaDataItem<T>> {
   // get a list of all items whose score is > 0
-  const fullList = list.map((item) => {
+  const fullList = list.map(item => {
     // get a string representation of all keys joined with ' ' or if no keys, the item stringified
     const searchString: string = keys
       ? keys
-          .map((key) => {
-            if (typeof key === 'string') {
-              const value = getProperty(item, key).join(' ');
-              return value;
-            }
-            return;
+          .map(key => {
+            const value = getProperty(item, key).join(' ');
+            return value;
           })
           .join(' ')
       : `${item}`;
@@ -59,7 +56,7 @@ function getMetaDataList<T>(
   });
 
   // return only those items whose score is > 0
-  return fullList.filter((item) => item.score > 0);
+  return fullList.filter(item => item.score > 0);
 }
 
 interface MetaDataItem<T> {
