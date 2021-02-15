@@ -46,3 +46,20 @@ test('no keys', () => {
   expect(searchResults).toHaveLength(1);
   expect(searchResults[0]).toBe('thing');
 });
+
+test('acronym bonus', () => {
+  const searchResults = seaq(['Hillsdale Michigan', 'historymi'], 'HiMi');
+  expect(searchResults).toHaveLength(2);
+  expect(searchResults[0]).toBe('Hillsdale Michigan');
+});
+
+test('acronym bonus fuzzy', () => {
+  const searchResults = seaq(
+    ['Hillsdale Michigan', 'historymi'],
+    'HiMi',
+    undefined,
+    0.5,
+  );
+  expect(searchResults).toHaveLength(2);
+  expect(searchResults[0]).toBe('Hillsdale Michigan');
+});
