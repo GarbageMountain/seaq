@@ -1,7 +1,7 @@
 /**
  * Seaq is a Fuzzy searching utility function.
  */
-import { string_score } from './Scorer';
+import { string_score } from './string_score';
 
 /**
  * Given an input list Array<T>, a set of object keys to search, and a search

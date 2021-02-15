@@ -1,8 +1,49 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1613354483584" clover="3.2.0">
-  <project timestamp="1613354483584" name="All files">
+<coverage generated="1613354630560" clover="3.2.0">
+  <project timestamp="1613354630560" name="All files">
     <metrics statements="82" coveredstatements="80" conditionals="49" coveredconditionals="47" methods="10" coveredmethods="10" elements="141" coveredelements="137" complexity="0" loc="82" ncloc="82" packages="1" files="3" classes="3"/>
-    <file name="Scorer.ts" path="/Users/steve/Dev/github.com/stephenlaughton/seaq/src/Scorer.ts">
+    <file name="Seaq.ts" path="/Users/steve/Dev/github.com/stephenlaughton/seaq/src/Seaq.ts">
+      <metrics statements="34" coveredstatements="34" conditionals="21" coveredconditionals="21" methods="8" coveredmethods="8"/>
+      <line num="4" count="2" type="stmt"/>
+      <line num="19" count="2" type="stmt"/>
+      <line num="25" count="6" type="stmt"/>
+      <line num="26" count="6" type="stmt"/>
+      <line num="27" count="530" type="stmt"/>
+      <line num="28" count="104" type="stmt"/>
+      <line num="38" count="6" type="stmt"/>
+      <line num="40" count="502" type="stmt"/>
+      <line num="43" count="800" type="stmt"/>
+      <line num="44" count="800" type="stmt"/>
+      <line num="49" count="502" type="stmt"/>
+      <line num="52" count="502" type="stmt"/>
+      <line num="59" count="502" type="stmt"/>
+      <line num="67" count="2" type="stmt"/>
+      <line num="70" count="1830" type="cond" truecount="2" falsecount="0"/>
+      <line num="72" count="1022" type="cond" truecount="2" falsecount="0"/>
+      <line num="74" count="3" type="stmt"/>
+      <line num="76" count="1019" type="stmt"/>
+      <line num="77" count="1019" type="stmt"/>
+      <line num="78" count="1019" type="stmt"/>
+      <line num="80" count="1019" type="cond" truecount="2" falsecount="0"/>
+      <line num="81" count="208" type="stmt"/>
+      <line num="82" count="208" type="stmt"/>
+      <line num="85" count="1019" type="stmt"/>
+      <line num="87" count="1019" type="cond" truecount="4" falsecount="0"/>
+      <line num="88" count="1017" type="cond" truecount="2" falsecount="0"/>
+      <line num="92" count="806" type="stmt"/>
+      <line num="93" count="211" type="cond" truecount="2" falsecount="0"/>
+      <line num="95" count="203" type="stmt"/>
+      <line num="96" count="206" type="stmt"/>
+      <line num="98" count="8" type="cond" truecount="2" falsecount="0"/>
+      <line num="100" count="5" type="stmt"/>
+      <line num="102" count="3" type="stmt"/>
+      <line num="107" count="1022" type="stmt"/>
+    </file>
+    <file name="index.ts" path="/Users/steve/Dev/github.com/stephenlaughton/seaq/src/index.ts">
+      <metrics statements="1" coveredstatements="1" conditionals="0" coveredconditionals="0" methods="1" coveredmethods="1"/>
+      <line num="1" count="7" type="stmt"/>
+    </file>
+    <file name="string_score.ts" path="/Users/steve/Dev/github.com/stephenlaughton/seaq/src/string_score.ts">
       <metrics statements="47" coveredstatements="45" conditionals="28" coveredconditionals="26" methods="1" coveredmethods="1"/>
       <line num="45" count="2" type="stmt"/>
       <line num="51" count="502" type="cond" truecount="2" falsecount="0"/>
@@ -51,47 +92,6 @@
       <line num="151" count="104" type="cond" truecount="4" falsecount="0"/>
       <line num="152" count="4" type="stmt"/>
       <line num="155" count="104" type="stmt"/>
-    </file>
-    <file name="Seaq.ts" path="/Users/steve/Dev/github.com/stephenlaughton/seaq/src/Seaq.ts">
-      <metrics statements="34" coveredstatements="34" conditionals="21" coveredconditionals="21" methods="8" coveredmethods="8"/>
-      <line num="4" count="2" type="stmt"/>
-      <line num="19" count="2" type="stmt"/>
-      <line num="25" count="6" type="stmt"/>
-      <line num="26" count="6" type="stmt"/>
-      <line num="27" count="530" type="stmt"/>
-      <line num="28" count="104" type="stmt"/>
-      <line num="38" count="6" type="stmt"/>
-      <line num="40" count="502" type="stmt"/>
-      <line num="43" count="800" type="stmt"/>
-      <line num="44" count="800" type="stmt"/>
-      <line num="49" count="502" type="stmt"/>
-      <line num="52" count="502" type="stmt"/>
-      <line num="59" count="502" type="stmt"/>
-      <line num="67" count="2" type="stmt"/>
-      <line num="70" count="1830" type="cond" truecount="2" falsecount="0"/>
-      <line num="72" count="1022" type="cond" truecount="2" falsecount="0"/>
-      <line num="74" count="3" type="stmt"/>
-      <line num="76" count="1019" type="stmt"/>
-      <line num="77" count="1019" type="stmt"/>
-      <line num="78" count="1019" type="stmt"/>
-      <line num="80" count="1019" type="cond" truecount="2" falsecount="0"/>
-      <line num="81" count="208" type="stmt"/>
-      <line num="82" count="208" type="stmt"/>
-      <line num="85" count="1019" type="stmt"/>
-      <line num="87" count="1019" type="cond" truecount="4" falsecount="0"/>
-      <line num="88" count="1017" type="cond" truecount="2" falsecount="0"/>
-      <line num="92" count="806" type="stmt"/>
-      <line num="93" count="211" type="cond" truecount="2" falsecount="0"/>
-      <line num="95" count="203" type="stmt"/>
-      <line num="96" count="206" type="stmt"/>
-      <line num="98" count="8" type="cond" truecount="2" falsecount="0"/>
-      <line num="100" count="5" type="stmt"/>
-      <line num="102" count="3" type="stmt"/>
-      <line num="107" count="1022" type="stmt"/>
-    </file>
-    <file name="index.ts" path="/Users/steve/Dev/github.com/stephenlaughton/seaq/src/index.ts">
-      <metrics statements="1" coveredstatements="1" conditionals="0" coveredconditionals="0" methods="1" coveredmethods="1"/>
-      <line num="1" count="7" type="stmt"/>
     </file>
   </project>
 </coverage>
