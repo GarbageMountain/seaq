@@ -1,56 +1,56 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1613339179683" clover="3.2.0">
-  <project timestamp="1613339179683" name="All files">
+<coverage generated="1613354483584" clover="3.2.0">
+  <project timestamp="1613354483584" name="All files">
     <metrics statements="82" coveredstatements="80" conditionals="49" coveredconditionals="47" methods="10" coveredmethods="10" elements="141" coveredelements="137" complexity="0" loc="82" ncloc="82" packages="1" files="3" classes="3"/>
     <file name="Scorer.ts" path="/Users/steve/Dev/github.com/stephenlaughton/seaq/src/Scorer.ts">
       <metrics statements="47" coveredstatements="45" conditionals="28" coveredconditionals="26" methods="1" coveredmethods="1"/>
-      <line num="11" count="2" type="stmt"/>
-      <line num="17" count="502" type="cond" truecount="2" falsecount="0"/>
-      <line num="18" count="1" type="stmt"/>
-      <line num="22" count="501" type="cond" truecount="2" falsecount="0"/>
-      <line num="23" count="100" type="stmt"/>
-      <line num="26" count="401" type="stmt"/>
-      <line num="29" count="401" type="stmt"/>
-      <line num="30" count="401" type="stmt"/>
-      <line num="31" count="401" type="stmt"/>
-      <line num="32" count="401" type="stmt"/>
-      <line num="33" count="401" type="stmt"/>
-      <line num="35" count="401" type="stmt"/>
-      <line num="36" count="401" type="stmt"/>
-      <line num="37" count="401" type="stmt"/>
-      <line num="41" count="401" type="cond" truecount="2" falsecount="0"/>
-      <line num="42" count="100" type="stmt"/>
-      <line num="47" count="401" type="cond" truecount="2" falsecount="0"/>
-      <line num="48" count="100" type="stmt"/>
-      <line num="50" count="700" type="stmt"/>
-      <line num="52" count="700" type="cond" truecount="2" falsecount="0"/>
-      <line num="53" count="522" type="stmt"/>
-      <line num="55" count="178" type="cond" truecount="2" falsecount="0"/>
-      <line num="57" count="51" type="stmt"/>
-      <line num="59" count="127" type="stmt"/>
-      <line num="64" count="127" type="cond" truecount="1" falsecount="1"/>
-      <line num="65" count="0" type="stmt"/>
-      <line num="70" count="178" type="cond" truecount="2" falsecount="0"/>
-      <line num="71" count="128" type="stmt"/>
-      <line num="75" count="178" type="stmt"/>
-      <line num="76" count="178" type="stmt"/>
-      <line num="80" count="301" type="stmt"/>
-      <line num="82" count="496" type="stmt"/>
-      <line num="84" count="496" type="cond" truecount="2" falsecount="0"/>
-      <line num="85" count="297" type="stmt"/>
-      <line num="88" count="199" type="cond" truecount="2" falsecount="0"/>
-      <line num="90" count="29" type="stmt"/>
-      <line num="92" count="170" type="stmt"/>
-      <line num="97" count="170" type="cond" truecount="1" falsecount="1"/>
-      <line num="98" count="0" type="stmt"/>
-      <line num="103" count="199" type="cond" truecount="2" falsecount="0"/>
-      <line num="104" count="137" type="stmt"/>
-      <line num="108" count="199" type="stmt"/>
-      <line num="109" count="199" type="stmt"/>
-      <line num="114" count="104" type="stmt"/>
-      <line num="117" count="104" type="cond" truecount="4" falsecount="0"/>
-      <line num="118" count="4" type="stmt"/>
-      <line num="121" count="104" type="stmt"/>
+      <line num="45" count="2" type="stmt"/>
+      <line num="51" count="502" type="cond" truecount="2" falsecount="0"/>
+      <line num="52" count="1" type="stmt"/>
+      <line num="56" count="501" type="cond" truecount="2" falsecount="0"/>
+      <line num="57" count="100" type="stmt"/>
+      <line num="60" count="401" type="stmt"/>
+      <line num="63" count="401" type="stmt"/>
+      <line num="64" count="401" type="stmt"/>
+      <line num="65" count="401" type="stmt"/>
+      <line num="66" count="401" type="stmt"/>
+      <line num="67" count="401" type="stmt"/>
+      <line num="69" count="401" type="stmt"/>
+      <line num="70" count="401" type="stmt"/>
+      <line num="71" count="401" type="stmt"/>
+      <line num="75" count="401" type="cond" truecount="2" falsecount="0"/>
+      <line num="76" count="100" type="stmt"/>
+      <line num="81" count="401" type="cond" truecount="2" falsecount="0"/>
+      <line num="82" count="100" type="stmt"/>
+      <line num="84" count="700" type="stmt"/>
+      <line num="86" count="700" type="cond" truecount="2" falsecount="0"/>
+      <line num="87" count="522" type="stmt"/>
+      <line num="89" count="178" type="cond" truecount="2" falsecount="0"/>
+      <line num="91" count="51" type="stmt"/>
+      <line num="93" count="127" type="stmt"/>
+      <line num="98" count="127" type="cond" truecount="1" falsecount="1"/>
+      <line num="99" count="0" type="stmt"/>
+      <line num="104" count="178" type="cond" truecount="2" falsecount="0"/>
+      <line num="105" count="128" type="stmt"/>
+      <line num="109" count="178" type="stmt"/>
+      <line num="110" count="178" type="stmt"/>
+      <line num="114" count="301" type="stmt"/>
+      <line num="116" count="496" type="stmt"/>
+      <line num="118" count="496" type="cond" truecount="2" falsecount="0"/>
+      <line num="119" count="297" type="stmt"/>
+      <line num="122" count="199" type="cond" truecount="2" falsecount="0"/>
+      <line num="124" count="29" type="stmt"/>
+      <line num="126" count="170" type="stmt"/>
+      <line num="131" count="170" type="cond" truecount="1" falsecount="1"/>
+      <line num="132" count="0" type="stmt"/>
+      <line num="137" count="199" type="cond" truecount="2" falsecount="0"/>
+      <line num="138" count="137" type="stmt"/>
+      <line num="142" count="199" type="stmt"/>
+      <line num="143" count="199" type="stmt"/>
+      <line num="148" count="104" type="stmt"/>
+      <line num="151" count="104" type="cond" truecount="4" falsecount="0"/>
+      <line num="152" count="4" type="stmt"/>
+      <line num="155" count="104" type="stmt"/>
     </file>
     <file name="Seaq.ts" path="/Users/steve/Dev/github.com/stephenlaughton/seaq/src/Seaq.ts">
       <metrics statements="34" coveredstatements="34" conditionals="21" coveredconditionals="21" methods="8" coveredmethods="8"/>
