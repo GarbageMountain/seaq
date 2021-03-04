@@ -19,7 +19,9 @@
     "prepare": "tsdx build",
     "size": "size-limit",
     "analyze": "size-limit --why",
-    "make-badges": "istanbul-badges-readme"
+    "make-badges": "istanbul-badges-readme",
+    "generate-test-data": "ts-node --project ./generator.tsconfig.json ./test/Data.generator.ts",
+    "benchmark": "jest --projects jest-bench.config.js"
   },
   "repository": {
     "type": "git",
@@ -68,8 +70,11 @@
     "@size-limit/preset-small-lib": "^4.9.2",
     "@types/faker": "^5.1.6",
     "faker": "^5.4.0",
+    "fuse.js": "^6.4.6",
     "husky": "^5.0.9",
+    "jest-bench": "^0.1.6",
     "size-limit": "^4.9.2",
+    "ts-node": "^9.1.1",
     "tsdx": "^0.14.1",
     "tslib": "^2.1.0",
     "typescript": "^4.1.5"
