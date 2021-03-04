@@ -12,12 +12,12 @@ import { string_score } from './string_score';
  * @template T generic
  * @param {Array<T>} list list of objects or strings to search
  * @param {string} query query string to match against keys in objects
- * @param {(Array<Extract<keyof T, string>> | string[])} keys keys to search in the object
- * @param {number} [fuzzy] fuzziness should be between 0 and 1. low fuzziness like 0.01 means a mismatch will drop the score more then a fuzziness of something like 0.9.
+ * @param {(Array<Extract<keyof T, string>> | string[])} keys optional keys to search in the object
+ * @param {number} [fuzzy] optional fuzziness should be between 0 and 1. low fuzziness like 0.01 means a mismatch will drop the score more then a fuzziness of something like 0.9.
  * @returns {Array<T>}
  */
 export function seaq<T>(
-  list: T[],
+  list: Array<T>,
   query: string,
   keys?: Array<Extract<keyof T, string>> | string[],
   fuzzy?: number,
