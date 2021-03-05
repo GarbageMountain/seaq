@@ -8,5 +8,10 @@
   },
   "editor.formatOnSave": true,
   "typescript.tsdk": "./node_modules/typescript/lib",
-  "wallaby.startAutomatically": true
+  "wallaby.startAutomatically": true,
+  "cSpell.words": [
+    "fusejs",
+    "seaq",
+    "seaqs"
+  ]
 }

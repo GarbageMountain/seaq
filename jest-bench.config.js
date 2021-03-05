@@ -1,7 +1,7 @@
 const normalConfig = require('./jest.config.js');
 
 const { testMatch, ...rest } = normalConfig;
-console.log(testMatch);
+console.info({ testMatch });
 module.exports = {
   ...rest,
   testEnvironment: 'jest-bench/environment',
