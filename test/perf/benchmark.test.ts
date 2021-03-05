@@ -1,12 +1,9 @@
-import { seaq } from '../dist';
+import { seaq } from '../../dist';
 import Fuse from 'fuse.js';
 
-import Books from './data/fuseBooks.json';
-import Contacts from './data/1_000Contacts.json';
-import ManyBooks from './data/10_000Books.json';
-import ManyContacts from './data/10_000Contacts.json';
+import { data } from './common';
 
-type Contacts = typeof Contacts;
+const { Books, ManyBooks, ManyContacts } = data;
 
 describe('compare with fusejs', () => {
   it('fuses', () => {
@@ -56,7 +53,7 @@ describe('compare with fusejs', () => {
 
   it('fuses biggest', () => {
     let start = performance.now();
-    const fuse = new Fuse(ManyContacts as Contacts, {
+    const fuse = new Fuse(ManyContacts, {
       keys: ['givenName', 'familyName'],
     });
     const fuseResults = fuse.search('nath fe');
@@ -72,7 +69,7 @@ describe('compare with fusejs', () => {
 
   it('seaqs biggest', () => {
     let start = performance.now();
-    const seaqResults = seaq(ManyContacts as Contacts, 'nath fe', [
+    const seaqResults = seaq(ManyContacts, 'nath fe', [
       'givenName',
       'familyName',
     ]);
@@ -81,7 +78,7 @@ describe('compare with fusejs', () => {
     expect(seaqResults[0].givenName).toBe('Natasha');
     expect(seaqResults[0].familyName).toBe("O'Keefe");
     start = performance.now();
-    const seaqResults2 = seaq(ManyContacts as Contacts, 'nath fe', [
+    const seaqResults2 = seaq(ManyContacts, 'nath fe', [
       'givenName',
       'familyName',
     ]);

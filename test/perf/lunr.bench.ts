@@ -1,10 +1,9 @@
 import { benchmarkSuite } from 'jest-bench';
-import { seaq } from '../dist';
 import Lunr from 'lunr';
 
-import Books from './data/fuseBooks.json';
-import ManyBooks from './data/10_000Books.json';
-import ManyContacts from './data/10_000Contacts.json';
+import { data, CONSECUTIVE_COUNT } from './common';
+
+const { Books, ManyBooks, ManyContacts } = data;
 
 benchmarkSuite('lunr - single search', {
   '23-books': () => {
@@ -55,19 +54,7 @@ benchmarkSuite('lunr - single search', {
   },
 });
 
-benchmarkSuite('seaq - single search', {
-  '23-books': () => {
-    seaq(Books, 'hi', ['title', 'author.firstName']);
-  },
-  '10,000-books': () => {
-    seaq(ManyBooks, 'cons con', ['title', 'author']);
-  },
-  '10,000-contacts': () => {
-    seaq(ManyContacts as any, 'nath fe', ['givenName', 'familyName']);
-  },
-});
-
-benchmarkSuite('lunr - two consecutive searches', {
+benchmarkSuite(`lunr - ${CONSECUTIVE_COUNT} consecutive searches`, {
   '23-books': () => {
     const search = Lunr(function() {
       let that = this;
@@ -82,8 +69,9 @@ benchmarkSuite('lunr - two consecutive searches', {
       });
     });
 
-    search.search('hi');
-    search.search('hi');
+    for (let index = 0; index < CONSECUTIVE_COUNT; index++) {
+      search.search('hi');
+    }
   },
   '10,000-books': () => {
     const search = Lunr(function() {
@@ -99,8 +87,9 @@ benchmarkSuite('lunr - two consecutive searches', {
       });
     });
 
-    search.search('cons con');
-    search.search('cons con');
+    for (let index = 0; index < CONSECUTIVE_COUNT; index++) {
+      search.search('cons con');
+    }
   },
   '10,000-contacts': () => {
     const search = Lunr(function() {
@@ -114,22 +103,9 @@ benchmarkSuite('lunr - two consecutive searches', {
         });
       });
     });
-    search.search('nath fe');
-    search.search('nath fe');
-  },
-});
 
-benchmarkSuite('seaq - two consecutive searches', {
-  '23-books': () => {
-    seaq(Books, 'hi', ['title', 'author.firstName']);
-    seaq(Books, 'hi', ['title', 'author.firstName']);
-  },
-  '10,000-books': () => {
-    seaq(ManyBooks, 'cons con', ['title', 'author']);
-    seaq(ManyBooks, 'cons con', ['title', 'author']);
-  },
-  '10,000-contacts': () => {
-    seaq(ManyContacts as any, 'nath fe', ['givenName', 'familyName']);
-    seaq(ManyContacts as any, 'nath fe', ['givenName', 'familyName']);
+    for (let index = 0; index < CONSECUTIVE_COUNT; index++) {
+      search.search('nath fe');
+    }
   },
 });
