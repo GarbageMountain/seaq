@@ -10,4 +10,4 @@ export const data = {
   ManyContacts: ManyContacts as typeof Contacts,
 };
 
-export const CONSECUTIVE_COUNT = 1000;
+export const CONSECUTIVE_COUNT = 10;
