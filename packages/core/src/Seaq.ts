@@ -4,25 +4,52 @@
 import { string_score } from './string_score';
 
 /**
- * Given an input list Array<T>, a set of object keys to search, and a search
- * query, Seaq will return a new Array<T> containing the results ordered by
- * their Score which is calculated using a variation of string_score algorithm.
- *
- * @export
- * @template T generic
- * @param {Array<T>} list list of objects or strings to search
- * @param {string} query query string to match against keys in objects
- * @param {(Array<Extract<keyof T, string>> | string[])} keys optional keys to search in the object
- * @param {number} [fuzzy] optional fuzziness should be between 0 and 1. low fuzziness like 0.01 means a mismatch will drop the score more then a fuzziness of something like 0.9.
- * @returns {Array<T>}
+ * Options for seaq search
  */
-export function seaq<T>(
-  list: Array<T>,
-  query: string,
-  keys?: Array<Extract<keyof T, string>> | string[],
-  fuzzy?: number,
-): Array<T> {
-  const l = getMetaDataList(list, query, keys, fuzzy);
+export interface SeaqOptions<T> {
+  /** Object keys to search (supports dot notation for nested properties) */
+  keys?: Array<Extract<keyof T, string>> | string[];
+  /** Fuzziness 0-1. Higher = more tolerant of typos. Default: undefined (strict) */
+  fuzziness?: number;
+  /**
+   * Score each field separately and take the best match.
+   * Faster (~50%) but won't match queries across multiple fields.
+   * e.g., "john smith" won't match firstName="John" + lastName="Smith"
+   * Default: false
+   */
+  fieldMode?: 'joined' | 'separate';
+}
+
+/**
+ * Fuzzy search an array of items.
+ *
+ * @param list - Array of objects or strings to search
+ * @param query - Search query
+ * @param options - Search options (keys, fuzziness, fieldMode)
+ * @returns Filtered and sorted array of matching items
+ *
+ * @example
+ * // Search objects by specific keys
+ * seaq(contacts, 'john', { keys: ['name', 'email'] })
+ *
+ * @example
+ * // Search with fuzziness for typo tolerance
+ * seaq(contacts, 'jonh', { keys: ['name'], fuzziness: 0.5 })
+ *
+ * @example
+ * // Fast per-field scoring (won't match across fields)
+ * seaq(contacts, 'john', { keys: ['firstName', 'lastName'], fieldMode: 'separate' })
+ *
+ * @example
+ * // Search string array (no keys needed)
+ * seaq(['apple', 'banana'], 'app')
+ */
+export function seaq<T>(list: Array<T>, query: string, options?: SeaqOptions<T>): Array<T> {
+  const keys = options?.keys as string[] | undefined;
+  const fuzziness = options?.fuzziness;
+  const fieldMode = options?.fieldMode ?? 'joined';
+
+  const l = getMetaDataList(list, query, keys, fuzziness, fieldMode);
   return l
     .sort((a: MetaDataItem<T>, b: MetaDataItem<T>) => b.score - a.score)
     .map((item: MetaDataItem<T>) => item.item);
@@ -31,40 +58,49 @@ export function seaq<T>(
 function getMetaDataList<T>(
   list: T[],
   query: string,
-  keys?: string[],
-  fuzzy?: number,
+  keys: string[] | undefined,
+  fuzziness: number | undefined,
+  fieldMode: 'joined' | 'separate',
 ): Array<MetaDataItem<T>> {
   // Pre-lowercase query once instead of per-item
   const lowerQuery = query.toLowerCase();
 
   // get a list of all items whose score is > 0
   const fullList = list.map((item) => {
-    // get a string representation of all keys joined with ' ' or if no keys, the item stringified
-    let searchString: string;
-    if (keys) {
-      searchString = keys
-        .map((key) => {
-          const value = getProperty(item, key).join(' ');
-          return value;
-        })
-        .join(' ');
-    } else if (typeof item === 'string') {
-      // Fast path for string arrays - no stringify needed
-      searchString = item;
-    } else if (typeof item === 'number') {
-      searchString = String(item);
-    } else {
-      // Object/array - need to stringify
-      searchString = JSON.stringify(item);
-    }
-    // calculate match score
-    const score = string_score(searchString, query, fuzzy, lowerQuery);
+    let score: number;
 
-    // return original item and its matching score
-    return {
-      item,
-      score,
-    };
+    if (keys) {
+      if (fieldMode === 'separate') {
+        // Score each key's values separately, take the best score
+        // Faster but won't match queries across multiple fields
+        let bestScore = 0;
+        for (const key of keys) {
+          const values = getProperty(item, key);
+          for (const value of values) {
+            const s = string_score(value, query, fuzziness, lowerQuery);
+            if (s > bestScore) bestScore = s;
+          }
+        }
+        score = bestScore;
+      } else {
+        // Join all field values and score as one string
+        // Allows matching across fields (e.g., "john smith" matches firstName + lastName)
+        const searchString = keys
+          .map((key) => getProperty(item, key).join(' '))
+          .join(' ');
+        score = string_score(searchString, query, fuzziness, lowerQuery);
+      }
+    } else if (typeof item === 'string') {
+      // Fast path for string arrays
+      score = string_score(item, query, fuzziness, lowerQuery);
+    } else if (typeof item === 'number') {
+      score = string_score(String(item), query, fuzziness, lowerQuery);
+    } else {
+      // Object/array without keys - stringify
+      score = string_score(JSON.stringify(item), query, fuzziness, lowerQuery);
+    }
+
+    return { item, score };
   });
 
   // return only those items whose score is > 0

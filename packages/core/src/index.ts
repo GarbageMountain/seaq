@@ -1,1 +1,1 @@
-export { seaq } from './Seaq';
+export { seaq, type SeaqOptions } from './Seaq';
