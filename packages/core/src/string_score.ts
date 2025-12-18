@@ -42,7 +42,12 @@
  * @param {number} [fuzziness]
  * @returns {number}
  */
-export function string_score(target: string, query: string, fuzziness?: number): number {
+export function string_score(
+  target: string,
+  query: string,
+  fuzziness?: number,
+  lowerQuery?: string,
+): number {
   // If the string is equal to the word, perfect match.
   if (target === query) {
     return 1;
@@ -59,7 +64,7 @@ export function string_score(target: string, query: string, fuzziness?: number):
   const rawString = target;
   const lString = rawString.toLowerCase();
   const strLength = rawString.length;
-  const lWord = query.toLowerCase();
+  const lWord = lowerQuery ?? query.toLowerCase();
   const wordLength = query.length;
   let idxOf: number;
   let startAt = 0;

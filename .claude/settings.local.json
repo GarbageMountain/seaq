@@ -4,7 +4,9 @@
       "Bash(mkdir:*)",
       "Bash(yarn benchmark)",
       "Bash(npm view:*)",
-      "Bash(yarn vitest:*)"
+      "Bash(yarn vitest:*)",
+      "Bash(yarn workspace seaq vitest run:*)",
+      "Bash(yarn workspace seaq vitest bench:*)"
     ],
     "deny": [],
     "ask": []

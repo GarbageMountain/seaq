@@ -34,6 +34,9 @@ function getMetaDataList<T>(
   keys?: string[],
   fuzzy?: number,
 ): Array<MetaDataItem<T>> {
+  // Pre-lowercase query once instead of per-item
+  const lowerQuery = query.toLowerCase();
+
   // get a list of all items whose score is > 0
   const fullList = list.map((item) => {
     // get a string representation of all keys joined with ' ' or if no keys, the item stringified
@@ -46,7 +49,7 @@ function getMetaDataList<T>(
           .join(' ')
       : JSON.stringify(item);
     // calculate match score
-    const score = string_score(searchString, query, fuzzy);
+    const score = string_score(searchString, query, fuzzy, lowerQuery);
 
     // return original item and its matching score
     return {
