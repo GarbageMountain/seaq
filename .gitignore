@@ -1,6 +1,28 @@
-*.log
-.DS_Store
+# Dependencies
 node_modules
+
+# Build outputs
 dist
-coverage/
-benchmarks/
+.tsc-out
+
+# Test & coverage
+coverage
+
+# Yarn
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# OS
+.DS_Store
+*.log
+
+# IDE
+.idea
+*.swp
+
+# Misc
+benchmarks

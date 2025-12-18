@@ -1,0 +1,60 @@
+{
+  "name": "seaq",
+  "version": "2.0.0",
+  "description": "ES6 Text Search - lightweight fuzzy string matching",
+  "license": "MIT",
+  "author": "Stephen Laughton",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stephenlaughton/seaq.git"
+  },
+  "keywords": [
+    "search",
+    "string_score",
+    "fuzzy",
+    "text-search",
+    "filter"
+  ],
+  "bugs": {
+    "url": "https://github.com/stephenlaughton/seaq/issues"
+  },
+  "homepage": "https://github.com/stephenlaughton/seaq#readme",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "benchmark": "vitest bench"
+  },
+  "devDependencies": {
+    "@faker-js/faker": "^10.1.0",
+    "@leeoniya/ufuzzy": "^1.0.19",
+    "@types/lunr": "^2.3.7",
+    "fuse.js": "^7.1.0",
+    "lunr": "^2.3.9",
+    "minisearch": "^7.2.0",
+    "tsup": "^8.5.1",
+    "vitest": "^4.0.16"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(yarn benchmark)",
+      "Bash(npm view:*)",
+      "Bash(yarn vitest:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,86 +1,24 @@
 {
-  "version": "1.1.5",
-  "description": "ES6 Text Search.",
-  "license": "MIT",
-  "main": "dist/index.js",
-  "typings": "dist/index.d.ts",
-  "files": [
-    "dist",
-    "src"
+  "name": "seaq-monorepo",
+  "private": true,
+  "version": "2.0.0",
+  "packageManager": "yarn@4.12.0",
+  "workspaces": [
+    "packages/*"
   ],
   "engines": {
-    "node": ">=10"
+    "node": ">=22"
   },
   "scripts": {
-    "start": "tsdx watch",
-    "build": "tsdx build",
-    "test": "tsdx test --coverage",
-    "lint": "tsdx lint",
-    "prepare": "tsdx build",
-    "size": "size-limit",
-    "analyze": "size-limit --why",
-    "make-badges": "istanbul-badges-readme",
-    "generate-test-data": "ts-node --project ./generator.tsconfig.json ./test/Data.generator.ts",
-    "benchmark": "jest --projects jest-bench.config.js"
+    "build": "yarn workspaces foreach -A run build",
+    "test": "yarn workspaces foreach -A run test",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "ts-check": "tsc --build --incremental",
+    "clean": "rm -rf .tsc-out packages/*/dist"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/stephenlaughton/seaq.git"
-  },
-  "keywords": [
-    "search",
-    "string_score",
-    "fuzzy"
-  ],
-  "bugs": {
-    "url": "https://github.com/stephenlaughton/seaq/issues"
-  },
-  "homepage": "https://github.com/stephenlaughton/seaq#readme",
-  "peerDependencies": {},
-  "jest": {
-    "coverageReporters": [
-      "json-summary"
-    ]
-  },
-  "husky": {
-    "hooks": {
-      "pre-commit": "tsdx lint"
-    }
-  },
-  "prettier": {
-    "printWidth": 80,
-    "semi": true,
-    "singleQuote": true,
-    "trailingComma": "all"
-  },
-  "name": "seaq",
-  "author": "Stephen Laughton",
-  "module": "dist/seaq.esm.js",
-  "size-limit": [
-    {
-      "path": "dist/seaq.cjs.production.min.js",
-      "limit": "10 KB"
-    },
-    {
-      "path": "dist/seaq.esm.js",
-      "limit": "10 KB"
-    }
-  ],
   "devDependencies": {
-    "@size-limit/preset-small-lib": "^4.9.2",
-    "@types/faker": "^5.1.7",
-    "@types/lunr": "^2.3.3",
-    "faker": "^5.4.0",
-    "fuse.js": "^6.4.6",
-    "husky": "^5.0.9",
-    "istanbul-badges-readme": "^1.2.0",
-    "jest-bench": "^0.1.6",
-    "lunr": "^2.3.9",
-    "size-limit": "^4.9.2",
-    "ts-node": "^9.1.1",
-    "tsdx": "^0.14.1",
-    "tslib": "^2.1.0",
-    "typescript": "^4.2.2"
-  },
-  "dependencies": {}
+    "@biomejs/biome": "^2.3.10",
+    "typescript": "^5.9.3"
+  }
 }

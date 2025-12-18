@@ -1,0 +1,29 @@
+{
+  "files": {
+    "includes": ["**", "!**/dist", "!**/node_modules", "!**/.tsc-out", "!**/coverage"]
+  },
+  "formatter": {
+    "indentStyle": "space",
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single"
+    }
+  },
+  "json": {
+    "parser": {
+      "allowComments": true
+    }
+  },
+  "linter": {
+    "rules": {
+      "style": {
+        "noUnusedTemplateLiteral": "off"
+      },
+      "complexity": {
+        "noForEach": "warn"
+      }
+    }
+  }
+}

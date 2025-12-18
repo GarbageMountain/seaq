@@ -42,11 +42,7 @@
  * @param {number} [fuzziness]
  * @returns {number}
  */
-export function string_score(
-  target: string,
-  query: string,
-  fuzziness?: number,
-): number {
+export function string_score(target: string, query: string, fuzziness?: number): number {
   // If the string is equal to the word, perfect match.
   if (target === query) {
     return 1;
@@ -81,7 +77,7 @@ export function string_score(
   if (fuzziness) {
     for (i = 0; i < wordLength; i += 1) {
       // Find next first case-insensitive match of a character.
-      idxOf = lString.indexOf(lWord[i], startAt);
+      idxOf = lString.indexOf(lWord.charAt(i), startAt);
 
       if (idxOf === -1) {
         fuzzies += fuzzyFactor;
@@ -113,7 +109,7 @@ export function string_score(
   } else {
     for (i = 0; i < wordLength; i += 1) {
       // Find next first case-insensitive match of a character.
-      idxOf = lString.indexOf(lWord[i], startAt);
+      idxOf = lString.indexOf(lWord.charAt(i), startAt);
 
       if (-1 === idxOf) {
         return 0;
@@ -145,8 +141,7 @@ export function string_score(
   }
 
   // Reduce penalty for longer strings.
-  finalScore =
-    (0.5 * (runningScore / strLength + runningScore / wordLength)) / fuzzies;
+  finalScore = (0.5 * (runningScore / strLength + runningScore / wordLength)) / fuzzies;
 
   if (lWord[0] === lString[0] && finalScore < 0.85) {
     finalScore += 0.15;

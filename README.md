@@ -1,48 +1,142 @@
-# Seaq - Real nice ES6 fuzzy string search
+# Seaq - Lightweight ES6 fuzzy text search
 
-Seaq is an ES6 string search library heavily inspired by [Fuse.js](https://github.com/krisk/fuse). It is built in [Typescript](https://github.com/Microsoft/TypeScript) implementing the fantastic [string_score](https://github.com/joshaven/string_score) string matching algorithm.
+Seaq is a fast, zero-dependency fuzzy string search library. No index required - just pass your data and search.
 
-| Statements                                                                  | Branches                                                                  | Functions                                                                  | Lines                                                                  |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| ![Statements](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg) | ![Branches](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg) | ![Functions](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg) | ![Lines](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg) |
+Built in TypeScript using the [string_score](https://github.com/joshaven/string_score) algorithm with added support for nested objects, array traversal, and acronym matching.
 
-## Basic usage
+## Install
+
+```bash
+npm install seaq
+```
+
+## Basic Usage
 
 ```typescript
 import { seaq } from 'seaq';
 
-const contacts = [ { name: 'John', ... }, { name: 'Jane', ... }];
-const queryString = 'jo';
+// Search an array of objects
+const contacts = [
+  { name: 'John Smith', email: 'john@example.com' },
+  { name: 'Jane Doe', email: 'jane@test.com' },
+];
+const results = seaq(contacts, 'jo', ['name', 'email']);
+// => [{ name: 'John Smith', ... }]
 
-const orderedContacts = seaq(contacts, queryString, ['name']);
+// Search nested properties
+const users = [
+  { name: 'Alice', address: { city: 'New York' } },
+  { name: 'Bob', address: { city: 'Los Angeles' } },
+];
+const results = seaq(users, 'new york', ['address.city']);
+
+// Search arrays within objects
+const people = [
+  { name: 'Charlie', emails: [{ address: 'charlie@work.com' }, { address: 'charlie@home.com' }] },
+];
+const results = seaq(people, 'work.com', ['emails.address']);
+
+// Simple string array
+const fruits = ['apple', 'banana', 'orange'];
+const results = seaq(fruits, 'app');
+// => ['apple']
 ```
 
 ## API
 
 ```typescript
-/**
- * Given an input list Array<T>, a set of object keys to search, and a search
- * query, Seaq will return a new Array<T> containing the results ordered by
- * their Score which is calculated using a variation of string_score algorithm.
- *
- * @export
- * @template T generic
- * @param {Array<T>} list list of objects or strings to search
- * @param {string} query query string to match against keys in objects
- * @param {(Array<Extract<keyof T, string>> | string[])} keys optional keys to search in the object
- * @param {number} [fuzzy] optional fuzziness should be between 0 and 1. low fuzziness like 0.01 means a mismatch will drop the score more then a fuzziness of something like 0.9.
- * @returns {Array<T>}
- */
-export function seaq<T>(
-  list: Array<T>,
-  query: string,
-  keys?: Array<Extract<keyof T, string>> | string[],
-  fuzzy?: number,
-): Array<T>;
+function seaq<T>(
+  list: T[],           // Array of objects or strings to search
+  query: string,       // Search query
+  keys?: string[],     // Object keys to search (supports dot notation)
+  fuzziness?: number,  // Optional: 0-1, higher = more tolerant of typos
+): T[];
 ```
 
-## Performance
+## Features
 
-Running `yarn benchmark` yields the follow results comparing `seaq` to [`Fuse.js`](https://github.com/krisk/Fuse)
-![Benchmark](./benchmark.png)
-Granted this is not an apples to apples comparison because `Fuse.js` and `seaq` provide very different results. `seaq` has fewer configuration options and may not be flexible enough for some use-cases. But generally, if performance is your primary concern, `seaq` may be the right tool for the job.
+### Acronym Matching
+
+Seaq gives bonus score to acronym matches - great for searching names:
+
+```typescript
+seaq(['Hillsdale Michigan', 'Historical Museum'], 'HiMi');
+// => ['Hillsdale Michigan', 'Historical Museum']  (Hillsdale ranked first!)
+```
+
+### Nested Object & Array Access
+
+Use dot notation to search deep into objects:
+
+```typescript
+// Nested objects
+seaq(users, 'new york', ['address.city']);
+
+// Arrays of objects
+seaq(contacts, 'gmail', ['emails.address']);  // searches all emails
+```
+
+### Optional Fuzziness
+
+By default, seaq requires all characters to match in sequence. Enable fuzziness to tolerate typos:
+
+```typescript
+// Strict (default) - "jonh" won't match "John"
+seaq(contacts, 'jonh', ['name']);
+
+// Fuzzy - "jonh" matches "John"
+seaq(contacts, 'jonh', ['name'], 0.5);
+```
+
+## Comparison with Other Libraries
+
+### Feature Support
+
+| Feature | seaq | fuse.js | minisearch | ufuzzy | lunr |
+|---------|:----:|:-------:|:----------:|:------:|:----:|
+| Exact match | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Fuzzy/typo tolerance | ✓ | ✓ | ~ | ✓ | ~ |
+| Partial/prefix match | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Acronym bonus** | **✓** | ~ | ✗ | ✗ | ✗ |
+| **Nested object access** | **✓** | ✓ | ✗ | ✗ | ✗ |
+| **Array field traversal** | **✓** | ~ | ✗ | ✗ | ✗ |
+| Pre-built index | ✗ | ✓ | ✓ | ✗ | ✓ |
+| Zero dependencies | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+### Performance (10K contacts)
+
+**Cold start** (no pre-built index):
+| Library | ops/sec |
+|---------|---------|
+| uFuzzy | 1,113 |
+| **seaq** | **399** |
+| MiniSearch | 65 |
+| Fuse.js | 34 |
+| Lunr | 10 |
+
+**Search only** (index pre-built):
+| Library | ops/sec |
+|---------|---------|
+| MiniSearch | 645,061 |
+| Lunr | 470,558 |
+| uFuzzy | 5,236 |
+| **seaq** | **369** |
+| Fuse.js | 39 |
+
+### When to Use Seaq
+
+**Use seaq when:**
+- You need to search nested objects or arrays
+- Acronym matching matters (e.g., "NYC" → "New York City")
+- Your dataset is small-medium (<10K items) or changes frequently
+- You want zero setup - no index to build or maintain
+- Cold-start performance matters (user searches immediately)
+
+**Consider alternatives when:**
+- You have large static datasets with repeated searches (use MiniSearch/Lunr)
+- You need the absolute fastest search-only performance (use MiniSearch)
+- You only search flat string arrays (use uFuzzy)
+
+## License
+
+MIT

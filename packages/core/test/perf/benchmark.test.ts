@@ -1,6 +1,6 @@
-import { seaq } from '../../dist';
 import Fuse from 'fuse.js';
-
+import { describe, expect, it } from 'vitest';
+import { seaq } from '../../src/index';
 import { data } from './common';
 
 const { Books, ManyBooks, ManyContacts } = data;
@@ -15,6 +15,7 @@ describe('compare with fusejs', () => {
     console.log(performance.now() - start);
     expect(fuseResults.length).toBe(18);
   });
+
   it('seaqs', () => {
     const start = performance.now();
     const seaqResults = seaq(Books, 'hi', ['title', 'author.firstName']);
@@ -69,19 +70,13 @@ describe('compare with fusejs', () => {
 
   it('seaqs biggest', () => {
     let start = performance.now();
-    const seaqResults = seaq(ManyContacts, 'nath fe', [
-      'givenName',
-      'familyName',
-    ]);
+    const seaqResults = seaq(ManyContacts, 'nath fe', ['givenName', 'familyName']);
     console.log(performance.now() - start);
     expect(seaqResults.length).toBe(1);
     expect(seaqResults[0].givenName).toBe('Natasha');
     expect(seaqResults[0].familyName).toBe("O'Keefe");
     start = performance.now();
-    const seaqResults2 = seaq(ManyContacts, 'nath fe', [
-      'givenName',
-      'familyName',
-    ]);
+    const seaqResults2 = seaq(ManyContacts, 'nath fe', ['givenName', 'familyName']);
     console.log(performance.now() - start);
     expect(seaqResults2[0].givenName).toBe('Natasha');
   });

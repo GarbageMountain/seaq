@@ -1,3 +1,4 @@
+import { expect, test } from 'vitest';
 import { getProperty } from '../src/Seaq';
 
 test('it works', () => {
@@ -29,18 +30,9 @@ test('it works', () => {
     extra: null,
   };
   expect(getProperty(testObj, 'name')).toEqual(['joe']);
-  expect(getProperty(testObj, 'emails.email')).toEqual([
-    'joe@test.com',
-    'joey@tester.com',
-  ]);
-  expect(getProperty(testObj, 'emails.meta.provider')).toEqual([
-    'test.com',
-    'tester.com',
-  ]);
-  expect(getProperty(testObj, 'emails.meta.confirmed')).toEqual([
-    'false',
-    'true',
-  ]);
+  expect(getProperty(testObj, 'emails.email')).toEqual(['joe@test.com', 'joey@tester.com']);
+  expect(getProperty(testObj, 'emails.meta.provider')).toEqual(['test.com', 'tester.com']);
+  expect(getProperty(testObj, 'emails.meta.confirmed')).toEqual(['false', 'true']);
   expect(getProperty(testObj, 'address')).toEqual([
     '{"line1":"1234 Main Street","line2":"Vancouver BC","line3":"V0V0V0"}',
   ]);

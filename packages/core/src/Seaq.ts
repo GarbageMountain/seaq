@@ -35,11 +35,11 @@ function getMetaDataList<T>(
   fuzzy?: number,
 ): Array<MetaDataItem<T>> {
   // get a list of all items whose score is > 0
-  const fullList = list.map(item => {
+  const fullList = list.map((item) => {
     // get a string representation of all keys joined with ' ' or if no keys, the item stringified
     const searchString: string = keys
       ? keys
-          .map(key => {
+          .map((key) => {
             const value = getProperty(item, key).join(' ');
             return value;
           })
@@ -56,7 +56,7 @@ function getMetaDataList<T>(
   });
 
   // return only those items whose score is > 0
-  return fullList.filter(item => item.score > 0);
+  return fullList.filter((item) => item.score > 0);
 }
 
 interface MetaDataItem<T> {
@@ -64,11 +64,7 @@ interface MetaDataItem<T> {
   score: number;
 }
 
-export function getProperty(
-  obj: any,
-  path: string | null,
-  list: string[] = [],
-): string[] {
+export function getProperty(obj: any, path: string | null, list: string[] = []): string[] {
   if (!path) {
     // If there's no path left, we've gotten to the object we care about.
     list.push(JSON.stringify(obj));
@@ -85,10 +81,7 @@ export function getProperty(
     const value = obj[firstSegment];
 
     if (value !== null && value !== undefined) {
-      if (
-        !remaining &&
-        (typeof value === 'string' || typeof value === 'number')
-      ) {
+      if (!remaining && (typeof value === 'string' || typeof value === 'number')) {
         list.push(value.toString());
       } else if (Array.isArray(value)) {
         // Search each item in the array.

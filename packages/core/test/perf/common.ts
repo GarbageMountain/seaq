@@ -1,7 +1,7 @@
-import Books from '../data/fuseBooks.json';
 import Contacts from '../data/1_000Contacts.json';
 import ManyBooks from '../data/10_000Books.json';
 import ManyContacts from '../data/10_000Contacts.json';
+import Books from '../data/fuseBooks.json';
 
 export const data = {
   Books,
