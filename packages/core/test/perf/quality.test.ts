@@ -57,7 +57,7 @@ const nestedData = [
 
 describe('Feature: Exact Match', () => {
   test('seaq finds exact match', () => {
-    const results = seaq(people, 'John Smith', ['name']);
+    const results = seaq(people, 'John Smith', { keys: ['name'] });
     expect(results[0]?.name).toBe('John Smith');
   });
 
@@ -86,7 +86,7 @@ describe('Feature: Fuzzy/Typo Tolerance', () => {
   // Searching for "jonh" (typo) should find "John"
 
   test('seaq with fuzziness finds typo', () => {
-    const results = seaq(people, 'jonh', ['name'], 0.5);
+    const results = seaq(people, 'jonh', { keys: ['name'], fuzziness: 0.5 });
     const names = results.map(r => r.name);
     expect(names.some(n => n.includes('John'))).toBe(true);
   });
@@ -94,7 +94,7 @@ describe('Feature: Fuzzy/Typo Tolerance', () => {
   test('seaq WITHOUT fuzziness uses character-by-character scoring', () => {
     // seaq scores based on character positions, not fuzzy edit distance
     // "jonh" matches "John" because j-o-n-h can all be found in sequence
-    const results = seaq(people, 'jonh', ['name']); // no fuzziness
+    const results = seaq(people, 'jonh', { keys: ['name'] }); // no fuzziness
     const names = results.map(r => r.name);
     console.log('seaq no-fuzzy "jonh" results:', names);
     // It finds John Smith because all chars j-o-n-h appear in order in "John Smith"
@@ -195,14 +195,14 @@ describe('Feature: Nested Object Access', () => {
   // seaq can search nested properties like 'address.city'
 
   test('seaq searches nested properties', () => {
-    const results = seaq(people, 'New York', ['address.city']);
+    const results = seaq(people, 'New York', { keys: ['address.city'] });
     expect(results.length).toBe(2);
     expect(results.every(r => r.address.city === 'New York')).toBe(true);
   });
 
   test('seaq searches deeply nested arrays', () => {
     // Search for email address inside array of email objects
-    const results = seaq(nestedData, 'bigcorp', ['emails.address']);
+    const results = seaq(nestedData, 'bigcorp', { keys: ['emails.address'] });
     expect(results.length).toBe(1);
     expect(results[0]?.name).toBe('Charlie');
   });
@@ -247,7 +247,7 @@ describe('Feature: Multi-word Queries', () => {
   // How do libraries handle "john new york" across multiple fields?
 
   test('seaq handles multi-word across fields', () => {
-    const results = seaq(people, 'john new', ['name', 'address.city']);
+    const results = seaq(people, 'john new', { keys: ['name', 'address.city'] });
     // Should find people named John in New York
     expect(results.some(r => r.name.includes('John') && r.address.city === 'New York')).toBe(true);
   });
@@ -276,13 +276,13 @@ describe('Quality: Ranking', () => {
   // Best match should be ranked first
 
   test('seaq ranks exact match first', () => {
-    const results = seaq(people, 'John Smith', ['name']);
+    const results = seaq(people, 'John Smith', { keys: ['name'] });
     expect(results[0]?.name).toBe('John Smith');
   });
 
   test('seaq ranks by relevance', () => {
     // "John" should rank John Smith higher than Mike Johnson
-    const results = seaq(people, 'John', ['name']);
+    const results = seaq(people, 'John', { keys: ['name'] });
     const johnSmithIdx = results.findIndex(r => r.name === 'John Smith');
     const mikeJohnsonIdx = results.findIndex(r => r.name === 'Mike Johnson');
     expect(johnSmithIdx).toBeLessThan(mikeJohnsonIdx);

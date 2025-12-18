@@ -110,7 +110,7 @@ function calculateMetrics(retrieved: number[], expected: number[]) {
 // ============================================================================
 
 function searchSeaq(query: string, keys: string[], fuzzy = false): number[] {
-  const results = seaq(people, query, keys, fuzzy ? 0.5 : undefined);
+  const results = seaq(people, query, { keys, fuzziness: fuzzy ? 0.5 : undefined });
   return results.map((p) => p.id);
 }
 
