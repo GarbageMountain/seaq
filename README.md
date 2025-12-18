@@ -20,7 +20,7 @@ const contacts = [
   { name: 'John Smith', email: 'john@example.com' },
   { name: 'Jane Doe', email: 'jane@test.com' },
 ];
-const results = seaq(contacts, 'jo', ['name', 'email']);
+const results = seaq(contacts, 'jo', { keys: ['name', 'email'] });
 // => [{ name: 'John Smith', ... }]
 
 // Search nested properties
@@ -28,15 +28,15 @@ const users = [
   { name: 'Alice', address: { city: 'New York' } },
   { name: 'Bob', address: { city: 'Los Angeles' } },
 ];
-const results = seaq(users, 'new york', ['address.city']);
+const results = seaq(users, 'new york', { keys: ['address.city'] });
 
 // Search arrays within objects
 const people = [
   { name: 'Charlie', emails: [{ address: 'charlie@work.com' }, { address: 'charlie@home.com' }] },
 ];
-const results = seaq(people, 'work.com', ['emails.address']);
+const results = seaq(people, 'work.com', { keys: ['emails.address'] });
 
-// Simple string array
+// Simple string array (no keys needed)
 const fruits = ['apple', 'banana', 'orange'];
 const results = seaq(fruits, 'app');
 // => ['apple']
@@ -45,13 +45,34 @@ const results = seaq(fruits, 'app');
 ## API
 
 ```typescript
-function seaq<T>(
-  list: T[],           // Array of objects or strings to search
-  query: string,       // Search query
-  keys?: string[],     // Object keys to search (supports dot notation)
-  fuzziness?: number,  // Optional: 0-1, higher = more tolerant of typos
-): T[];
+import { seaq, type SeaqOptions } from 'seaq';
+
+seaq(list, query, options?)
 ```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `list` | `T[]` | Array of objects or strings to search |
+| `query` | `string` | Search query |
+| `options` | `SeaqOptions<T>` | Optional configuration (see below) |
+
+### Options
+
+```typescript
+interface SeaqOptions<T> {
+  keys?: string[];           // Object keys to search (supports dot notation)
+  fuzziness?: number;        // 0-1, higher = more tolerant of typos
+  fieldMode?: 'joined' | 'separate';  // How to score multiple fields (default: 'joined')
+  limit?: number;            // Max results to return (more efficient than .slice())
+}
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `keys` | - | Which fields to search. Supports dot notation for nested properties (`'address.city'`) and arrays (`'emails.address'`). |
+| `fuzziness` | `undefined` | Typo tolerance. `0` = exact, `0.5` = moderate, `1` = very fuzzy. Default is strict matching. |
+| `fieldMode` | `'joined'` | `'joined'` concatenates all fields (matches across fields like "john smith" → firstName + lastName). `'separate'` scores each field independently and takes the best match (~30-40% faster). |
+| `limit` | - | Return only top N results. Uses a min-heap internally for O(n log k) performance - faster than sorting everything then using `.slice()`. |
 
 ## Features
 
@@ -70,10 +91,10 @@ Use dot notation to search deep into objects:
 
 ```typescript
 // Nested objects
-seaq(users, 'new york', ['address.city']);
+seaq(users, 'new york', { keys: ['address.city'] });
 
-// Arrays of objects
-seaq(contacts, 'gmail', ['emails.address']);  // searches all emails
+// Arrays of objects - searches ALL emails for each contact
+seaq(contacts, 'gmail', { keys: ['emails.address'] });
 ```
 
 ### Optional Fuzziness
@@ -82,10 +103,20 @@ By default, seaq requires all characters to match in sequence. Enable fuzziness 
 
 ```typescript
 // Strict (default) - "jonh" won't match "John"
-seaq(contacts, 'jonh', ['name']);
+seaq(contacts, 'jonh', { keys: ['name'] });
 
 // Fuzzy - "jonh" matches "John"
-seaq(contacts, 'jonh', ['name'], 0.5);
+seaq(contacts, 'jonh', { keys: ['name'], fuzziness: 0.5 });
+```
+
+### Performance Options
+
+```typescript
+// Fast mode: score fields separately (won't match "john smith" across firstName + lastName)
+seaq(contacts, 'john', { keys: ['firstName', 'lastName'], fieldMode: 'separate' });
+
+// Limit results: faster than .slice() for large datasets
+seaq(contacts, 'john', { keys: ['name'], limit: 10 });
 ```
 
 ## Comparison with Other Libraries
@@ -103,25 +134,17 @@ seaq(contacts, 'jonh', ['name'], 0.5);
 | Pre-built index | ✗ | ✓ | ✓ | ✗ | ✓ |
 | Zero dependencies | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-### Performance (10K contacts)
+### Performance (10K items, single search)
 
-**Cold start** (no pre-built index):
-| Library | ops/sec |
-|---------|---------|
-| uFuzzy | 1,113 |
-| **seaq** | **399** |
-| MiniSearch | 65 |
-| Fuse.js | 34 |
-| Lunr | 10 |
+| Library | 10K Books | 10K Contacts | Notes |
+|---------|-----------|--------------|-------|
+| uFuzzy | 3,473 ops/s | 4,874 ops/s | Fastest, but flat strings only |
+| **seaq (separate)** | **676 ops/s** | **699 ops/s** | Fast mode, no cross-field matching |
+| **seaq (joined)** | **520 ops/s** | **548 ops/s** | Default mode, full features |
+| MiniSearch | 37 ops/s | 87 ops/s | Requires index build |
+| Fuse.js | 24 ops/s | 38 ops/s | Most flexible, slowest |
 
-**Search only** (index pre-built):
-| Library | ops/sec |
-|---------|---------|
-| MiniSearch | 645,061 |
-| Lunr | 470,558 |
-| uFuzzy | 5,236 |
-| **seaq** | **369** |
-| Fuse.js | 39 |
+**seaq is 14-22x faster than Fuse.js** and competitive with MiniSearch on cold starts.
 
 ### When to Use Seaq
 

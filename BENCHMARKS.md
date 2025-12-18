@@ -4,9 +4,10 @@ This document provides detailed benchmark comparisons between seaq and other pop
 
 ## TL;DR
 
+- **seaq** is 14-22x faster than Fuse.js on single searches
 - **seaq** excels at cold-start scenarios, nested data, and acronym matching
-- **MiniSearch/Lunr** are 1000x+ faster for repeated searches on static, flat data
-- **uFuzzy** is fastest overall but only works with flat string arrays
+- **uFuzzy** is ~5-7x faster than seaq but only works with flat string arrays
+- **MiniSearch/Lunr** are 1000x+ faster for repeated searches on static, pre-indexed data
 - **Fuse.js** is flexible but slowest across the board
 
 ## Test Environment
@@ -14,6 +15,37 @@ This document provides detailed benchmark comparisons between seaq and other pop
 - Node.js 22
 - Vitest benchmarks
 - Dataset: 10K generated contacts with nested emails, addresses, and company info
+
+---
+
+## Performance Summary (10K items)
+
+### Single Search (no pre-built index)
+
+| Library | 10K Books | 10K Contacts | Notes |
+|---------|-----------|--------------|-------|
+| uFuzzy | 3,473 ops/s | 4,874 ops/s | Fastest, flat strings only |
+| **seaq (separate mode)** | **676 ops/s** | **699 ops/s** | ~30% faster, no cross-field matching |
+| **seaq (joined mode)** | **520 ops/s** | **548 ops/s** | Default, full feature support |
+| MiniSearch | 37 ops/s | 87 ops/s | Includes index build time |
+| Fuse.js | 24 ops/s | 38 ops/s | Slowest |
+
+### 10 Consecutive Searches
+
+| Library | 10K Books | 10K Contacts |
+|---------|-----------|--------------|
+| uFuzzy | 358 ops/s | 480 ops/s |
+| MiniSearch | 38 ops/s | 88 ops/s |
+| **seaq (joined)** | **52 ops/s** | **48 ops/s** |
+| Fuse.js | 2.6 ops/s | 4.4 ops/s |
+
+### Key Takeaways
+
+- **seaq is 14-22x faster than Fuse.js** on cold-start searches
+- **seaq is 6-14x faster than MiniSearch** when index build time is included
+- **uFuzzy is ~5-7x faster than seaq** but lacks nested object support and acronym matching
+- **seaq's `separate` mode** gives ~30% speed boost when you don't need cross-field matching
+- **seaq's `limit` option** is ~24% faster than using `.slice()` for top-N results
 
 ---
 
@@ -106,7 +138,19 @@ seaq is competitive even without flattening, and much simpler to use.
 
 ---
 
-## General Performance (10K contacts)
+## General Performance (10K items)
+
+### Single Search (cold start, no index)
+
+| Library | 10K Books | 10K Contacts | Mean Time |
+|---------|-----------|--------------|-----------|
+| uFuzzy | 3,473 ops/s | 4,874 ops/s | 0.2-0.3ms |
+| **seaq (separate)** | **676 ops/s** | **699 ops/s** | **1.4-1.5ms** |
+| **seaq (joined)** | **520 ops/s** | **548 ops/s** | **1.8-1.9ms** |
+| MiniSearch | 37 ops/s | 87 ops/s | 11-27ms |
+| Fuse.js | 24 ops/s | 38 ops/s | 26-42ms |
+
+**seaq is 14-22x faster than Fuse.js** on single searches.
 
 ### Search Only (index pre-built)
 
@@ -120,17 +164,13 @@ seaq is competitive even without flattening, and much simpler to use.
 
 With pre-built indexes, MiniSearch and Lunr are ~1000-3000x faster than seaq.
 
-### Cold Start (no pre-built index)
+### seaq Performance Options
 
-| Library | ops/s |
-|---------|-------|
-| uFuzzy | 1,144 |
-| **seaq** | **433** |
-| MiniSearch | 65 |
-| Fuse.js | 36 |
-| Lunr | 10 |
-
-**seaq is 6-7x faster than MiniSearch** and **11x faster than Lunr** on first search.
+| Mode | 10K Books | 10K Contacts | Trade-off |
+|------|-----------|--------------|-----------|
+| `fieldMode: 'joined'` (default) | 520 ops/s | 548 ops/s | Full cross-field matching |
+| `fieldMode: 'separate'` | 676 ops/s | 699 ops/s | ~30% faster, single-field only |
+| `limit: 10` vs `.slice(0,10)` | 516 vs 450 ops/s | 533 vs 446 ops/s | ~19-24% faster |
 
 ### Simulated Typing (7 keystrokes: n→na→nat→...→natasha)
 
