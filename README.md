@@ -137,6 +137,8 @@ seaq(contacts, 'jonh', ['name'], 0.5);
 - You need the absolute fastest search-only performance (use MiniSearch)
 - You only search flat string arrays (use uFuzzy)
 
+For detailed benchmark methodology and results, see [BENCHMARKS.md](./BENCHMARKS.md).
+
 ## License
 
 MIT
