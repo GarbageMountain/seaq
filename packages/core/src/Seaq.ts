@@ -15,9 +15,14 @@ export interface SeaqOptions<T> {
    * Score each field separately and take the best match.
    * Faster (~50%) but won't match queries across multiple fields.
    * e.g., "john smith" won't match firstName="John" + lastName="Smith"
-   * Default: false
+   * Default: 'joined'
    */
   fieldMode?: 'joined' | 'separate';
+  /**
+   * Maximum number of results to return.
+   * More efficient than using .slice() as it avoids sorting all results.
+   */
+  limit?: number;
 }
 
 /**
@@ -25,7 +30,7 @@ export interface SeaqOptions<T> {
  *
  * @param list - Array of objects or strings to search
  * @param query - Search query
- * @param options - Search options (keys, fuzziness, fieldMode)
+ * @param options - Search options (keys, fuzziness, fieldMode, limit)
  * @returns Filtered and sorted array of matching items
  *
  * @example
@@ -41,6 +46,10 @@ export interface SeaqOptions<T> {
  * seaq(contacts, 'john', { keys: ['firstName', 'lastName'], fieldMode: 'separate' })
  *
  * @example
+ * // Get only top 10 results (faster than .slice(0, 10))
+ * seaq(contacts, 'john', { keys: ['name'], limit: 10 })
+ *
+ * @example
  * // Search string array (no keys needed)
  * seaq(['apple', 'banana'], 'app')
  */
@@ -48,14 +57,103 @@ export function seaq<T>(list: Array<T>, query: string, options?: SeaqOptions<T>)
   const keys = options?.keys as string[] | undefined;
   const fuzziness = options?.fuzziness;
   const fieldMode = options?.fieldMode ?? 'joined';
+  const limit = options?.limit;
 
-  const l = getMetaDataList(list, query, keys, fuzziness, fieldMode);
-  return l
-    .sort((a: MetaDataItem<T>, b: MetaDataItem<T>) => b.score - a.score)
-    .map((item: MetaDataItem<T>) => item.item);
+  const scored = scoreItems(list, query, keys, fuzziness, fieldMode);
+
+  if (limit !== undefined && limit > 0) {
+    // Use partial sort - only find top N items
+    return getTopN(scored, limit).map((item) => item.item);
+  }
+
+  // Full sort for all results
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .map((item) => item.item);
 }
 
-function getMetaDataList<T>(
+/**
+ * Get top N items by score using a min-heap for efficiency.
+ * O(n log k) instead of O(n log n) for full sort.
+ */
+function getTopN<T>(items: Array<MetaDataItem<T>>, n: number): Array<MetaDataItem<T>> {
+  if (items.length <= n) {
+    // If we have fewer items than limit, just sort them all
+    return items.sort((a, b) => b.score - a.score);
+  }
+
+  // Use a min-heap to track top N items
+  // The heap stores the N highest-scoring items, with the minimum at the root
+  const heap: Array<MetaDataItem<T>> = [];
+
+  for (const item of items) {
+    if (heap.length < n) {
+      // Heap not full yet, add item
+      heapPush(heap, item);
+    } else if (item.score > heap[0].score) {
+      // Item scores higher than our current minimum - replace it
+      heapReplace(heap, item);
+    }
+    // Otherwise item scores lower than all top N, skip it
+  }
+
+  // Extract items from heap in sorted order (highest first)
+  const result: Array<MetaDataItem<T>> = [];
+  while (heap.length > 0) {
+    result.push(heapPop(heap)!);
+  }
+  return result.reverse();
+}
+
+// Min-heap operations (smallest score at root)
+function heapPush<T>(heap: Array<MetaDataItem<T>>, item: MetaDataItem<T>): void {
+  heap.push(item);
+  let i = heap.length - 1;
+  while (i > 0) {
+    const parent = Math.floor((i - 1) / 2);
+    if (heap[i].score >= heap[parent].score) break;
+    [heap[i], heap[parent]] = [heap[parent], heap[i]];
+    i = parent;
+  }
+}
+
+function heapPop<T>(heap: Array<MetaDataItem<T>>): MetaDataItem<T> | undefined {
+  if (heap.length === 0) return undefined;
+  const result = heap[0];
+  const last = heap.pop()!;
+  if (heap.length > 0) {
+    heap[0] = last;
+    heapifyDown(heap, 0);
+  }
+  return result;
+}
+
+function heapReplace<T>(heap: Array<MetaDataItem<T>>, item: MetaDataItem<T>): void {
+  heap[0] = item;
+  heapifyDown(heap, 0);
+}
+
+function heapifyDown<T>(heap: Array<MetaDataItem<T>>, i: number): void {
+  const len = heap.length;
+  while (true) {
+    const left = 2 * i + 1;
+    const right = 2 * i + 2;
+    let smallest = i;
+
+    if (left < len && heap[left].score < heap[smallest].score) {
+      smallest = left;
+    }
+    if (right < len && heap[right].score < heap[smallest].score) {
+      smallest = right;
+    }
+    if (smallest === i) break;
+
+    [heap[i], heap[smallest]] = [heap[smallest], heap[i]];
+    i = smallest;
+  }
+}
+
+function scoreItems<T>(
   list: T[],
   query: string,
   keys: string[] | undefined,
@@ -65,14 +163,14 @@ function getMetaDataList<T>(
   // Pre-lowercase query once instead of per-item
   const lowerQuery = query.toLowerCase();
 
-  // get a list of all items whose score is > 0
-  const fullList = list.map((item) => {
+  const result: Array<MetaDataItem<T>> = [];
+
+  for (const item of list) {
     let score: number;
 
     if (keys) {
       if (fieldMode === 'separate') {
         // Score each key's values separately, take the best score
-        // Faster but won't match queries across multiple fields
         let bestScore = 0;
         for (const key of keys) {
           const values = getProperty(item, key);
@@ -84,27 +182,26 @@ function getMetaDataList<T>(
         score = bestScore;
       } else {
         // Join all field values and score as one string
-        // Allows matching across fields (e.g., "john smith" matches firstName + lastName)
         const searchString = keys
           .map((key) => getProperty(item, key).join(' '))
           .join(' ');
         score = string_score(searchString, query, fuzziness, lowerQuery);
       }
     } else if (typeof item === 'string') {
-      // Fast path for string arrays
       score = string_score(item, query, fuzziness, lowerQuery);
     } else if (typeof item === 'number') {
       score = string_score(String(item), query, fuzziness, lowerQuery);
     } else {
-      // Object/array without keys - stringify
       score = string_score(JSON.stringify(item), query, fuzziness, lowerQuery);
     }
 
-    return { item, score };
-  });
+    // Only include items with score > 0
+    if (score > 0) {
+      result.push({ item, score });
+    }
+  }
 
-  // return only those items whose score is > 0
-  return fullList.filter((item) => item.score > 0);
+  return result;
 }
 
 interface MetaDataItem<T> {

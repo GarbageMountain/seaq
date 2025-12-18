@@ -109,6 +109,32 @@ describe('extra features', () => {
   });
 });
 
+describe('limit option', () => {
+  test('returns only top N results', () => {
+    const results = seaq(ManyContacts as any, 'na', {
+      keys: ['givenName', 'familyName'],
+      limit: 10,
+    });
+    expect(results).toHaveLength(10);
+  });
+
+  test('returns all results when limit exceeds matches', () => {
+    const results = seaq(Contacts, 'Felicita', { keys: ['givenName'], limit: 100 });
+    expect(results).toHaveLength(1);
+  });
+
+  test('returns same top results as slice (with unique scores)', () => {
+    // Use a query that produces more distinct scores
+    const allResults = seaq(ManyContacts as any, 'nath fe', { keys: ['givenName', 'familyName'] });
+    const limitResults = seaq(ManyContacts as any, 'nath fe', {
+      keys: ['givenName', 'familyName'],
+      limit: 1,
+    });
+    // The top result should be the same
+    expect(limitResults[0]).toEqual(allResults[0]);
+  });
+});
+
 describe('fieldMode option', () => {
   const contacts = [
     { firstName: 'John', lastName: 'Smith' },

@@ -66,3 +66,21 @@ describe(`seaq - ${CONSECUTIVE_COUNT} consecutive searches (joined mode)`, () =>
     }
   });
 });
+
+describe('seaq - top 10 results (slice vs limit)', () => {
+  bench('10,000-contacts - slice(0,10) [current way]', () => {
+    seaq(ManyContacts, 'na', { keys: ['givenName', 'familyName'] }).slice(0, 10);
+  });
+
+  bench('10,000-contacts - limit: 10 [optimized]', () => {
+    seaq(ManyContacts, 'na', { keys: ['givenName', 'familyName'], limit: 10 });
+  });
+
+  bench('10,000-books - slice(0,10) [current way]', () => {
+    seaq(ManyBooks, 'the', { keys: ['title', 'author'] }).slice(0, 10);
+  });
+
+  bench('10,000-books - limit: 10 [optimized]', () => {
+    seaq(ManyBooks, 'the', { keys: ['title', 'author'], limit: 10 });
+  });
+});
