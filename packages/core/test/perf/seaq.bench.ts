@@ -4,7 +4,10 @@ import { CONSECUTIVE_COUNT, data } from './common';
 
 const { Books, ManyBooks, ManyContacts } = data;
 
-describe('seaq - single search', () => {
+// Simple string array for no-keys testing
+const stringArray = ManyContacts.map((c) => `${c.givenName} ${c.familyName}`);
+
+describe('seaq - single search (with keys)', () => {
   bench('23-books', () => {
     seaq(Books, 'hi', ['title', 'author.firstName']);
   });
@@ -18,7 +21,19 @@ describe('seaq - single search', () => {
   });
 });
 
-describe(`seaq - ${CONSECUTIVE_COUNT} consecutive searches`, () => {
+describe('seaq - single search (no keys - string array)', () => {
+  bench('10,000-strings', () => {
+    seaq(stringArray, 'nath fe');
+  });
+});
+
+describe('seaq - single search (no keys - object array)', () => {
+  bench('10,000-contacts', () => {
+    seaq(ManyContacts, 'nath fe');
+  });
+});
+
+describe(`seaq - ${CONSECUTIVE_COUNT} consecutive searches (with keys)`, () => {
   bench('23-books', () => {
     for (let index = 0; index < CONSECUTIVE_COUNT; index++) {
       seaq(Books, 'hi', ['title', 'author.firstName']);

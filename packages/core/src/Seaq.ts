@@ -40,14 +40,23 @@ function getMetaDataList<T>(
   // get a list of all items whose score is > 0
   const fullList = list.map((item) => {
     // get a string representation of all keys joined with ' ' or if no keys, the item stringified
-    const searchString: string = keys
-      ? keys
-          .map((key) => {
-            const value = getProperty(item, key).join(' ');
-            return value;
-          })
-          .join(' ')
-      : JSON.stringify(item);
+    let searchString: string;
+    if (keys) {
+      searchString = keys
+        .map((key) => {
+          const value = getProperty(item, key).join(' ');
+          return value;
+        })
+        .join(' ');
+    } else if (typeof item === 'string') {
+      // Fast path for string arrays - no stringify needed
+      searchString = item;
+    } else if (typeof item === 'number') {
+      searchString = String(item);
+    } else {
+      // Object/array - need to stringify
+      searchString = JSON.stringify(item);
+    }
     // calculate match score
     const score = string_score(searchString, query, fuzzy, lowerQuery);
 
@@ -70,7 +79,14 @@ interface MetaDataItem<T> {
 export function getProperty(obj: any, path: string | null, list: string[] = []): string[] {
   if (!path) {
     // If there's no path left, we've gotten to the object we care about.
-    list.push(JSON.stringify(obj));
+    // Fast path for primitives - avoid JSON.stringify
+    if (typeof obj === 'string') {
+      list.push(obj);
+    } else if (typeof obj === 'number' || typeof obj === 'boolean') {
+      list.push(String(obj));
+    } else if (obj !== null && obj !== undefined) {
+      list.push(JSON.stringify(obj));
+    }
   } else {
     const dotIndex = path.indexOf('.');
     let firstSegment = path;
