@@ -96,6 +96,24 @@ describe('extra features', () => {
     expect(searchResults[0]).toBe('thing');
   });
 
+  test('no keys - number array', () => {
+    const searchResults = seaq([123, 456, 789], '45');
+    expect(searchResults).toHaveLength(1);
+    expect(searchResults[0]).toBe(456);
+  });
+
+  test('no keys - object array (JSON stringified)', () => {
+    const items = [{ x: 'hello' }, { x: 'world' }];
+    const searchResults = seaq(items, 'hello');
+    expect(searchResults).toHaveLength(1);
+    expect(searchResults[0]).toEqual({ x: 'hello' });
+  });
+
+  test('no keys - empty list', () => {
+    const searchResults = seaq([], 'test');
+    expect(searchResults).toHaveLength(0);
+  });
+
   test('acronym bonus', () => {
     const searchResults = seaq(['Hillsdale Michigan', 'historymi'], 'HiMi');
     expect(searchResults).toHaveLength(2);
@@ -106,6 +124,13 @@ describe('extra features', () => {
     const searchResults = seaq(['Hillsdale Michigan', 'historymi'], 'HiMi', { fuzziness: 0.5 });
     expect(searchResults).toHaveLength(2);
     expect(searchResults[0]).toBe('Hillsdale Michigan');
+  });
+
+  test('does not mutate the input array', () => {
+    const original = ['banana', 'apple', 'cherry'];
+    const copy = [...original];
+    seaq(original, 'a');
+    expect(original).toEqual(copy);
   });
 });
 
@@ -118,9 +143,13 @@ describe('limit option', () => {
     expect(results).toHaveLength(10);
   });
 
-  test('returns all results when limit exceeds matches', () => {
-    const results = seaq(Contacts, 'Felicita', { keys: ['givenName'], limit: 100 });
-    expect(results).toHaveLength(1);
+  test('returns all results sorted when limit exceeds matches', () => {
+    // Use a query that matches multiple items but fewer than the limit,
+    // exercising the "items.length <= n" sort path in getTopN
+    const allResults = seaq(Contacts, 'merv', { keys: ['givenName', 'familyName'] });
+    const limitResults = seaq(Contacts, 'merv', { keys: ['givenName', 'familyName'], limit: 1000 });
+    expect(limitResults.length).toBe(allResults.length);
+    expect(limitResults).toEqual(allResults);
   });
 
   test('returns same top results as slice (with unique scores)', () => {

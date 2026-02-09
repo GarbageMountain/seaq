@@ -87,7 +87,6 @@ const groundTruth: Record<string, { query: string; keys: string[]; expected: num
 // ============================================================================
 
 function calculateMetrics(retrieved: number[], expected: number[]) {
-  const retrievedSet = new Set(retrieved);
   const expectedSet = new Set(expected);
 
   const truePositives = retrieved.filter((id) => expectedSet.has(id)).length;
@@ -141,7 +140,7 @@ describe('Quality Metrics: Precision & Recall', () => {
   const testCases = Object.entries(groundTruth);
 
   describe('seaq (no fuzzy)', () => {
-    test.each(testCases)('%s: %s', (name, { query, keys, expected, description }) => {
+    test.each(testCases)('%s: %s', (_name, { query, keys, expected }) => {
       const retrieved = searchSeaq(query, keys, false);
       const metrics = calculateMetrics(retrieved, expected);
 
@@ -154,7 +153,7 @@ describe('Quality Metrics: Precision & Recall', () => {
   });
 
   describe('seaq (fuzzy)', () => {
-    test.each(testCases)('%s: %s', (name, { query, keys, expected, description }) => {
+    test.each(testCases)('%s: %s', (_name, { query, keys, expected }) => {
       const retrieved = searchSeaq(query, keys, true);
       const metrics = calculateMetrics(retrieved, expected);
 
@@ -166,7 +165,7 @@ describe('Quality Metrics: Precision & Recall', () => {
   });
 
   describe('fuse.js', () => {
-    test.each(testCases)('%s: %s', (name, { query, keys, expected, description }) => {
+    test.each(testCases)('%s: %s', (_name, { query, keys, expected }) => {
       const retrieved = searchFuse(query, keys);
       const metrics = calculateMetrics(retrieved, expected);
 
@@ -178,7 +177,7 @@ describe('Quality Metrics: Precision & Recall', () => {
   });
 
   describe('minisearch', () => {
-    test.each(testCases)('%s: %s', (name, { query, keys, expected, description }) => {
+    test.each(testCases)('%s: %s', (_name, { query, keys, expected }) => {
       const retrieved = searchMiniSearch(query, keys);
       const metrics = calculateMetrics(retrieved, expected);
 
@@ -190,7 +189,7 @@ describe('Quality Metrics: Precision & Recall', () => {
   });
 
   describe('ufuzzy', () => {
-    test.each(testCases)('%s: %s', (name, { query, keys, expected, description }) => {
+    test.each(testCases)('%s: %s', (_name, { query, keys, expected }) => {
       const retrieved = searchUFuzzy(query, keys);
       const metrics = calculateMetrics(retrieved, expected);
 

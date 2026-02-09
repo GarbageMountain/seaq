@@ -4,33 +4,59 @@
 import { string_score } from './string_score';
 
 /**
- * Options for seaq search
+ * Configuration for {@link seaq} search behavior.
+ *
+ * All options are optional — calling `seaq(list, query)` with no options
+ * searches plain string arrays with strict (non-fuzzy) matching.
  */
 export interface SeaqOptions<T> {
-  /** Object keys to search (supports dot notation for nested properties) */
+  /**
+   * Object keys to search. Supports:
+   * - Simple keys: `['name', 'email']`
+   * - Dot notation for nested properties: `['address.city']`
+   * - Automatic array traversal: `['tags.name']` walks into arrays at any level
+   *
+   * Omit when searching a plain `string[]`.
+   */
   keys?: Array<Extract<keyof T, string>> | string[];
-  /** Fuzziness 0-1. Higher = more tolerant of typos. Default: undefined (strict) */
+  /**
+   * Fuzziness tolerance for typos, from 0 to 1.
+   *
+   * - `undefined` (default) — strict mode, every character must match somewhere
+   * - `0.1–0.3` — light tolerance, catches minor typos like "jonh" → "john"
+   * - `0.5` — moderate tolerance, good general-purpose starting point
+   * - `0.8–1` — very loose, matches almost anything (rarely useful)
+   */
   fuzziness?: number;
   /**
-   * Score each field separately and take the best match.
-   * Faster (~50%) but won't match queries across multiple fields.
-   * e.g., "john smith" won't match firstName="John" + lastName="Smith"
-   * Default: 'joined'
+   * How multi-field scoring works when multiple `keys` are provided.
+   *
+   * - `'joined'` (default) — concatenates all field values into one string before scoring.
+   *   Supports cross-field queries like "john smith" matching firstName="John" + lastName="Smith".
+   * - `'separate'` — scores each field independently and takes the best match.
+   *   ~50% faster, but cross-field queries won't work.
    */
   fieldMode?: 'joined' | 'separate';
   /**
    * Maximum number of results to return.
-   * More efficient than using .slice() as it avoids sorting all results.
+   *
+   * Uses a min-heap internally for O(n log k) selection instead of
+   * O(n log n) full sort, so this is significantly faster than sorting
+   * everything and calling `.slice(0, n)` on large result sets.
    */
   limit?: number;
 }
 
 /**
- * Fuzzy search an array of items.
+ * Fuzzy search an array of items, returning matches sorted by relevance.
+ *
+ * Items with a score of 0 (no match) are filtered out. The remaining items
+ * are sorted highest-score-first and returned as a new array (the original
+ * is never mutated).
  *
  * @param list - Array of objects or strings to search
- * @param query - Search query
- * @param options - Search options (keys, fuzziness, fieldMode, limit)
+ * @param query - Search query string. Empty string returns `[]`.
+ * @param options - See {@link SeaqOptions} for full details on keys, fuzziness, fieldMode, and limit.
  * @returns Filtered and sorted array of matching items
  *
  * @example
@@ -42,15 +68,19 @@ export interface SeaqOptions<T> {
  * seaq(contacts, 'jonh', { keys: ['name'], fuzziness: 0.5 })
  *
  * @example
+ * // Nested property + array traversal
+ * seaq(users, 'admin', { keys: ['roles.name'] })
+ *
+ * @example
  * // Fast per-field scoring (won't match across fields)
  * seaq(contacts, 'john', { keys: ['firstName', 'lastName'], fieldMode: 'separate' })
  *
  * @example
- * // Get only top 10 results (faster than .slice(0, 10))
+ * // Get only top 10 results efficiently
  * seaq(contacts, 'john', { keys: ['name'], limit: 10 })
  *
  * @example
- * // Search string array (no keys needed)
+ * // Search a plain string array (no keys needed)
  * seaq(['apple', 'banana'], 'app')
  */
 export function seaq<T>(list: Array<T>, query: string, options?: SeaqOptions<T>): Array<T> {
@@ -100,7 +130,7 @@ function getTopN<T>(items: Array<MetaDataItem<T>>, n: number): Array<MetaDataIte
   // Extract items from heap in sorted order (highest first)
   const result: Array<MetaDataItem<T>> = [];
   while (heap.length > 0) {
-    result.push(heapPop(heap)!);
+    result.push(heapPop(heap));
   }
   return result.reverse();
 }
@@ -117,8 +147,7 @@ function heapPush<T>(heap: Array<MetaDataItem<T>>, item: MetaDataItem<T>): void 
   }
 }
 
-function heapPop<T>(heap: Array<MetaDataItem<T>>): MetaDataItem<T> | undefined {
-  if (heap.length === 0) return undefined;
+function heapPop<T>(heap: Array<MetaDataItem<T>>): MetaDataItem<T> {
   const result = heap[0];
   const last = heap.pop()!;
   if (heap.length > 0) {
@@ -209,6 +238,18 @@ interface MetaDataItem<T> {
   score: number;
 }
 
+/**
+ * Resolve a dot-notation path on an object, collecting all leaf values as strings.
+ *
+ * Handles nested objects, arrays (traversed automatically), and primitives.
+ * For example, given `{ tags: [{ name: 'a' }, { name: 'b' }] }` and path
+ * `'tags.name'`, returns `['a', 'b']`.
+ *
+ * @param obj - The object to read from
+ * @param path - Dot-delimited property path, or `null` to stringify `obj` itself
+ * @param list - Accumulator array (used internally for recursion)
+ * @returns Array of string values found at the path
+ */
 export function getProperty(obj: any, path: string | null, list: string[] = []): string[] {
   if (!path) {
     // If there's no path left, we've gotten to the object we care about.

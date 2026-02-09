@@ -1,46 +1,23 @@
 /**
- * string_score is an implementation of the string score algo developed by
- * https://github.com/joshaven/string_score
+ * Score how well `query` matches `target`, returning a value between 0 and 1.
  *
- * "hello world".score("axl") //=> 0
- * "hello world".score("ow")  //=> 0.35454545454545455
+ * Based on the [string_score](https://github.com/joshaven/string_score) algorithm
+ * with bonuses for:
+ * - **Consecutive characters** — "hel" in "hello" scores higher than "h_e_l"
+ * - **Start-of-word / acronym** — "HiMi" strongly matches "Hillsdale Michigan"
+ * - **Case match** — exact case adds a small bonus
+ * - **Shorter targets** — matching in a short string is worth more than in a long one
  *
- * // Single letter match
- * "hello world".score("e")           //=>0.1090909090909091
+ * Returns `1` for an exact match, `0` for no match (or if `query` is empty).
+ * In strict mode (no fuzziness), a single unmatched character returns `0`.
  *
- * // Single letter match plus bonuses for beginning of word and beginning of phrase
- * "hello world".score("h")           //=>0.5363636363636364
- *
- * "hello world".score("he")          //=>0.5727272727272728
- * "hello world".score("hel")         //=>0.6090909090909091
- * "hello world".score("hell")        //=>0.6454545454545455
- * "hello world".score("hello")       //=>0.6818181818181818
- *  ...
- * "hello world".score("hello worl")  //=>0.8636363636363635
- * "hello world".score("hello world") //=> 1
- *
- *
- * // Using a "1" in place of an "l" is a mismatch unless the score is fuzzy
- * "hello world".score("hello wor1")  //=>0
- * "hello world".score("hello wor1",0.5)  //=>0.6081818181818182 (fuzzy)
- *
- * // Finding a match in a shorter string is more significant.
- * 'Hello'.score('h') //=>0.52
- * 'He'.score('h')    //=>0.6249999999999999
- *
- * // Same case matches better than wrong case
- * 'Hello'.score('h') //=>0.52
- * 'Hello'.score('H') //=>0.5800000000000001
- *
- * // Acronyms are given a little more weight
- * "Hillsdale Michigan".score("HiMi") > "Hillsdale Michigan".score("Hills")
- * "Hillsdale Michigan".score("HiMi") < "Hillsdale Michigan".score("Hillsd")
- *
- * @export
- * @param {string} target
- * @param {string} query
- * @param {number} [fuzziness]
- * @returns {number}
+ * @param target - The string being scored against
+ * @param query - The search query
+ * @param fuzziness - Optional fuzziness factor (0–1). When set, unmatched characters
+ *   degrade the score instead of returning 0 immediately.
+ * @param lowerQuery - Pre-lowercased query for performance (avoids repeated `.toLowerCase()` calls).
+ *   Computed automatically if omitted.
+ * @returns Score between 0 (no match) and 1 (perfect match)
  */
 export function string_score(
   target: string,

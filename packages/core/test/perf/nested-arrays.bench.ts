@@ -163,7 +163,7 @@ mini5K.addAll(flat5K);
 describe('Nested object search: company.name', () => {
   describe('1K contacts', () => {
     bench('seaq (native nested)', () => {
-      seaq(contacts1K, 'Acme', ['company.name']);
+      seaq(contacts1K, 'Acme', { keys: ['company.name'] });
     });
 
     bench('fuse.js (native nested)', () => {
@@ -177,7 +177,7 @@ describe('Nested object search: company.name', () => {
 
   describe('5K contacts', () => {
     bench('seaq (native nested)', () => {
-      seaq(contacts5K, 'Acme', ['company.name']);
+      seaq(contacts5K, 'Acme', { keys: ['company.name'] });
     });
 
     bench('fuse.js (native nested)', () => {
@@ -193,7 +193,7 @@ describe('Nested object search: company.name', () => {
 describe('Array field search: emails.address', () => {
   describe('1K contacts', () => {
     bench('seaq (native array traversal)', () => {
-      seaq(contacts1K, 'gmail', ['emails.address']);
+      seaq(contacts1K, 'gmail', { keys: ['emails.address'] });
     });
 
     bench('fuse.js (native array)', () => {
@@ -207,7 +207,7 @@ describe('Array field search: emails.address', () => {
 
   describe('5K contacts', () => {
     bench('seaq (native array traversal)', () => {
-      seaq(contacts5K, 'gmail', ['emails.address']);
+      seaq(contacts5K, 'gmail', { keys: ['emails.address'] });
     });
 
     bench('fuse.js (native array)', () => {
@@ -223,7 +223,7 @@ describe('Array field search: emails.address', () => {
 describe('Deep nested: addresses.city', () => {
   describe('1K contacts', () => {
     bench('seaq (native)', () => {
-      seaq(contacts1K, 'New York', ['addresses.city']);
+      seaq(contacts1K, 'New York', { keys: ['addresses.city'] });
     });
 
     bench('fuse.js (native)', () => {
@@ -243,7 +243,7 @@ describe('Deep nested: addresses.city', () => {
 describe('Cold start with nested data (includes data prep)', () => {
   describe('1K contacts', () => {
     bench('seaq (no prep needed)', () => {
-      seaq(contacts1K, 'Acme', ['company.name', 'emails.address']);
+      seaq(contacts1K, 'Acme', { keys: ['company.name', 'emails.address'] });
     });
 
     bench('fuse.js (index build)', () => {
@@ -261,7 +261,7 @@ describe('Cold start with nested data (includes data prep)', () => {
 
   describe('5K contacts', () => {
     bench('seaq (no prep needed)', () => {
-      seaq(contacts5K, 'Acme', ['company.name', 'emails.address']);
+      seaq(contacts5K, 'Acme', { keys: ['company.name', 'emails.address'] });
     });
 
     bench('fuse.js (index build)', () => {
@@ -284,7 +284,7 @@ describe('Cold start with nested data (includes data prep)', () => {
 
 describe('Multi-field nested search', () => {
   bench('seaq: search name + company + city', () => {
-    seaq(contacts1K, 'John Acme', ['name', 'company.name', 'addresses.city']);
+    seaq(contacts1K, 'John Acme', { keys: ['name', 'company.name', 'addresses.city'] });
   });
 
   bench('fuse.js: search name + company + city', () => {

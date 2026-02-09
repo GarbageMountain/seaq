@@ -49,7 +49,7 @@ const queries = {
 describe('10K contacts - search only (index pre-built)', () => {
   describe('short query "na"', () => {
     bench('seaq', () => {
-      seaq(ManyContacts, queries.short, ['givenName', 'familyName']);
+      seaq(ManyContacts, queries.short, { keys: ['givenName', 'familyName'] });
     });
 
     bench('fuse.js', () => {
@@ -71,7 +71,7 @@ describe('10K contacts - search only (index pre-built)', () => {
 
   describe('medium query "nath fe"', () => {
     bench('seaq', () => {
-      seaq(ManyContacts, queries.medium, ['givenName', 'familyName']);
+      seaq(ManyContacts, queries.medium, { keys: ['givenName', 'familyName'] });
     });
 
     bench('fuse.js', () => {
@@ -93,7 +93,7 @@ describe('10K contacts - search only (index pre-built)', () => {
 
   describe('long query "natasha okeefe"', () => {
     bench('seaq', () => {
-      seaq(ManyContacts, queries.long, ['givenName', 'familyName']);
+      seaq(ManyContacts, queries.long, { keys: ['givenName', 'familyName'] });
     });
 
     bench('fuse.js', () => {
@@ -120,7 +120,7 @@ describe('10K contacts - simulated typing (index pre-built)', () => {
 
   bench('seaq', () => {
     for (const query of keystrokes) {
-      seaq(ManyContacts, query, ['givenName', 'familyName']);
+      seaq(ManyContacts, query, { keys: ['givenName', 'familyName'] });
     }
   });
 
@@ -152,7 +152,7 @@ describe('10K contacts - simulated typing (index pre-built)', () => {
 // Cold start - no pre-built index, user searches immediately
 describe('10K contacts - cold start (build + search)', () => {
   bench('seaq', () => {
-    seaq(ManyContacts, queries.medium, ['givenName', 'familyName']);
+    seaq(ManyContacts, queries.medium, { keys: ['givenName', 'familyName'] });
   });
 
   bench('fuse.js', () => {
