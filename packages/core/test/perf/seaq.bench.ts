@@ -1,11 +1,41 @@
 import { bench, describe } from 'vitest';
 import { seaq } from '../../src/index';
+// @ts-expect-error - direct import from node_modules to avoid workspace resolution
+import { seaq as seaqV1 } from '../../../../node_modules/seaq/dist/seaq.esm.js';
 import { CONSECUTIVE_COUNT, data } from './common';
 
 const { Books, ManyBooks, ManyContacts } = data;
 
 // Simple string array for no-keys testing
 const stringArray = ManyContacts.map((c) => `${c.givenName} ${c.familyName}`);
+
+describe('seaq v1 vs v2 - 10K books', () => {
+  bench('v1 (published)', () => {
+    seaqV1(ManyBooks, 'cons con', ['title', 'author']);
+  });
+
+  bench('v2 (joined)', () => {
+    seaq(ManyBooks, 'cons con', { keys: ['title', 'author'] });
+  });
+
+  bench('v2 (separate)', () => {
+    seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'separate' });
+  });
+});
+
+describe('seaq v1 vs v2 - 10K contacts', () => {
+  bench('v1 (published)', () => {
+    seaqV1(ManyContacts, 'nath fe', ['givenName', 'familyName']);
+  });
+
+  bench('v2 (joined)', () => {
+    seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'] });
+  });
+
+  bench('v2 (separate)', () => {
+    seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'separate' });
+  });
+});
 
 describe('seaq - single search (joined mode - default)', () => {
   bench('23-books', () => {

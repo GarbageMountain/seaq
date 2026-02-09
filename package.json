@@ -20,6 +20,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",
     "@vitest/coverage-v8": "^4.0.18",
+    "seaq": "1.1.5",
     "typescript": "^5.9.3"
   }
 }

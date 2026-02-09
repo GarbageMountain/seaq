@@ -1690,9 +1690,17 @@ __metadata:
   dependencies:
     "@biomejs/biome": "npm:^2.3.10"
     "@vitest/coverage-v8": "npm:^4.0.18"
+    seaq: "npm:1.1.5"
     typescript: "npm:^5.9.3"
   languageName: unknown
   linkType: soft
+
+"seaq@npm:1.1.5":
+  version: 1.1.5
+  resolution: "seaq@npm:1.1.5"
+  checksum: 10c0/fbe12ac95ba81ff40089c7bc4717a1982ce9585c833dbde7857fb78589182746e7056e0d7f37b2afcbdd4d07707f6a7810a4953b2e6bc36db03df5cd2c8c6a80
+  languageName: node
+  linkType: hard
 
 "seaq@workspace:packages/core":
   version: 0.0.0-use.local

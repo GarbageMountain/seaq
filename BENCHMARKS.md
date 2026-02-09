@@ -4,6 +4,7 @@ This document provides detailed benchmark comparisons between seaq and other pop
 
 ## TL;DR
 
+- **seaq v2** is **10-16% faster** than v1 in default (joined) mode, and **49-55% faster** in the new `separate` mode
 - **seaq** is 14-22x faster than Fuse.js on single searches
 - **seaq** excels at cold-start scenarios, nested data, and acronym matching
 - **uFuzzy** is ~5-7x faster than seaq but only works with flat string arrays
@@ -18,6 +19,20 @@ This document provides detailed benchmark comparisons between seaq and other pop
 
 ---
 
+## v1 vs v2 Performance
+
+Comparing the published seaq v1 (1.1.5) against v2 on identical datasets. v2 gains come from pre-lowercasing the query once instead of per-item, avoiding `JSON.stringify` for primitives, and the new `separate` field mode.
+
+| | v1 (1.1.5) | v2 (joined) | v2 (separate) |
+|---|---|---|---|
+| **10K books** | 433 ops/s | 475 ops/s (+10%) | 644 ops/s (+49%) |
+| **10K contacts** | 463 ops/s | 536 ops/s (+16%) | 719 ops/s (+55%) |
+
+- **Default mode (joined)** is a drop-in replacement — same behavior, 10-16% faster
+- **Separate mode** is a new option that scores each field independently — 49-55% faster, but won't match queries that span multiple fields (e.g., "john smith" across firstName + lastName)
+
+---
+
 ## Performance Summary (10K items)
 
 ### Single Search (no pre-built index)
@@ -25,7 +40,7 @@ This document provides detailed benchmark comparisons between seaq and other pop
 | Library | 10K Books | 10K Contacts | Notes |
 |---------|-----------|--------------|-------|
 | uFuzzy | 3,473 ops/s | 4,874 ops/s | Fastest, flat strings only |
-| **seaq (separate mode)** | **676 ops/s** | **699 ops/s** | ~30% faster, no cross-field matching |
+| **seaq (separate mode)** | **644 ops/s** | **719 ops/s** | ~50% faster, no cross-field matching |
 | **seaq (joined mode)** | **520 ops/s** | **548 ops/s** | Default, full feature support |
 | MiniSearch | 37 ops/s | 87 ops/s | Includes index build time |
 | Fuse.js | 24 ops/s | 38 ops/s | Slowest |
@@ -41,11 +56,12 @@ This document provides detailed benchmark comparisons between seaq and other pop
 
 ### Key Takeaways
 
+- **seaq v2 is 10-16% faster than v1** out of the box (joined mode)
 - **seaq is 14-22x faster than Fuse.js** on cold-start searches
 - **seaq is 6-14x faster than MiniSearch** when index build time is included
 - **uFuzzy is ~5-7x faster than seaq** but lacks nested object support and acronym matching
-- **seaq's `separate` mode** gives ~30% speed boost when you don't need cross-field matching
-- **seaq's `limit` option** is ~24% faster than using `.slice()` for top-N results
+- **seaq's `separate` mode** gives ~50% speed boost when you don't need cross-field matching
+- **seaq's `limit` option** is ~20% faster than using `.slice()` for top-N results
 
 ---
 
@@ -145,7 +161,7 @@ seaq is competitive even without flattening, and much simpler to use.
 | Library | 10K Books | 10K Contacts | Mean Time |
 |---------|-----------|--------------|-----------|
 | uFuzzy | 3,473 ops/s | 4,874 ops/s | 0.2-0.3ms |
-| **seaq (separate)** | **676 ops/s** | **699 ops/s** | **1.4-1.5ms** |
+| **seaq (separate)** | **644 ops/s** | **719 ops/s** | **1.4-1.6ms** |
 | **seaq (joined)** | **520 ops/s** | **548 ops/s** | **1.8-1.9ms** |
 | MiniSearch | 37 ops/s | 87 ops/s | 11-27ms |
 | Fuse.js | 24 ops/s | 38 ops/s | 26-42ms |
@@ -168,9 +184,9 @@ With pre-built indexes, MiniSearch and Lunr are ~1000-3000x faster than seaq.
 
 | Mode | 10K Books | 10K Contacts | Trade-off |
 |------|-----------|--------------|-----------|
-| `fieldMode: 'joined'` (default) | 520 ops/s | 548 ops/s | Full cross-field matching |
-| `fieldMode: 'separate'` | 676 ops/s | 699 ops/s | ~30% faster, single-field only |
-| `limit: 10` vs `.slice(0,10)` | 516 vs 450 ops/s | 533 vs 446 ops/s | ~19-24% faster |
+| `fieldMode: 'joined'` (default) | 475 ops/s | 536 ops/s | Full cross-field matching |
+| `fieldMode: 'separate'` | 644 ops/s | 719 ops/s | ~50% faster, single-field only |
+| `limit: 10` vs `.slice(0,10)` | 502 vs 433 ops/s | 533 vs 460 ops/s | ~16-20% faster |
 
 ### Simulated Typing (7 keystrokes: n→na→nat→...→natasha)
 
