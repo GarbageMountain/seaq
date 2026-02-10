@@ -15,11 +15,11 @@ describe('seaq v1 vs v2 - 10K books', () => {
   });
 
   bench('v2 (joined)', () => {
-    seaq(ManyBooks, 'cons con', { keys: ['title', 'author'] });
+    seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'joined', fuzziness: 0 });
   });
 
   bench('v2 (separate)', () => {
-    seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'separate' });
+    seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'separate', fuzziness: 0 });
   });
 });
 
@@ -29,88 +29,116 @@ describe('seaq v1 vs v2 - 10K contacts', () => {
   });
 
   bench('v2 (joined)', () => {
-    seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'] });
+    seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0 });
   });
 
   bench('v2 (separate)', () => {
-    seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'separate' });
+    seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'separate', fuzziness: 0 });
   });
 });
 
-describe('seaq - single search (joined mode - default)', () => {
+describe('seaq - single search (joined mode)', () => {
   bench('23-books', () => {
-    seaq(Books, 'hi', { keys: ['title', 'author.firstName'] });
+    seaq(Books, 'hi', { keys: ['title', 'author.firstName'], fieldMode: 'joined', fuzziness: 0 });
   });
 
   bench('10,000-books', () => {
-    seaq(ManyBooks, 'cons con', { keys: ['title', 'author'] });
+    seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'joined', fuzziness: 0 });
   });
 
   bench('10,000-contacts', () => {
-    seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'] });
+    seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0 });
   });
 });
 
-describe('seaq - single search (separate mode - faster)', () => {
+describe('seaq - single search (separate mode)', () => {
   bench('23-books', () => {
-    seaq(Books, 'hi', { keys: ['title', 'author.firstName'], fieldMode: 'separate' });
+    seaq(Books, 'hi', { keys: ['title', 'author.firstName'], fieldMode: 'separate', fuzziness: 0 });
   });
 
   bench('10,000-books', () => {
-    seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'separate' });
+    seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'separate', fuzziness: 0 });
   });
 
   bench('10,000-contacts', () => {
-    seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'separate' });
+    seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'separate', fuzziness: 0 });
   });
 });
 
 describe('seaq - single search (no keys - string array)', () => {
   bench('10,000-strings', () => {
-    seaq(stringArray, 'nath fe');
+    seaq(stringArray, 'nath fe', { fuzziness: 0 });
   });
 });
 
 describe('seaq - single search (no keys - object array)', () => {
   bench('10,000-contacts', () => {
-    seaq(ManyContacts, 'nath fe');
+    seaq(ManyContacts, 'nath fe', { fuzziness: 0 });
   });
 });
 
 describe(`seaq - ${CONSECUTIVE_COUNT} consecutive searches (joined mode)`, () => {
   bench('23-books', () => {
     for (let index = 0; index < CONSECUTIVE_COUNT; index++) {
-      seaq(Books, 'hi', { keys: ['title', 'author.firstName'] });
+      seaq(Books, 'hi', { keys: ['title', 'author.firstName'], fieldMode: 'joined', fuzziness: 0 });
     }
   });
 
   bench('10,000-books', () => {
     for (let index = 0; index < CONSECUTIVE_COUNT; index++) {
-      seaq(ManyBooks, 'cons con', { keys: ['title', 'author'] });
+      seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'joined', fuzziness: 0 });
     }
   });
 
   bench('10,000-contacts', () => {
     for (let index = 0; index < CONSECUTIVE_COUNT; index++) {
-      seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'] });
+      seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0 });
     }
+  });
+});
+
+describe('seaq - includeMatches overhead (joined)', () => {
+  bench('10K contacts - without includeMatches', () => {
+    seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0 });
+  });
+
+  bench('10K contacts - with includeMatches', () => {
+    seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0, includeMatches: true });
+  });
+
+  bench('10K books - without includeMatches', () => {
+    seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'joined', fuzziness: 0 });
+  });
+
+  bench('10K books - with includeMatches', () => {
+    seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'joined', fuzziness: 0, includeMatches: true });
+  });
+});
+
+describe('seaq - includeMatches overhead (separate)', () => {
+  bench('10K contacts - without includeMatches', () => {
+    seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'separate', fuzziness: 0 });
+  });
+
+  bench('10K contacts - with includeMatches', () => {
+    seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'separate', fuzziness: 0, includeMatches: true });
   });
 });
 
 describe('seaq - top 10 results (slice vs limit)', () => {
   bench('10,000-contacts - slice(0,10) [current way]', () => {
-    seaq(ManyContacts, 'na', { keys: ['givenName', 'familyName'] }).slice(0, 10);
+    seaq(ManyContacts, 'na', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0 }).slice(0, 10);
   });
 
   bench('10,000-contacts - limit: 10 [optimized]', () => {
-    seaq(ManyContacts, 'na', { keys: ['givenName', 'familyName'], limit: 10 });
+    seaq(ManyContacts, 'na', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0, limit: 10 });
   });
 
   bench('10,000-books - slice(0,10) [current way]', () => {
-    seaq(ManyBooks, 'the', { keys: ['title', 'author'] }).slice(0, 10);
+    seaq(ManyBooks, 'the', { keys: ['title', 'author'], fieldMode: 'joined', fuzziness: 0 }).slice(0, 10);
   });
 
   bench('10,000-books - limit: 10 [optimized]', () => {
-    seaq(ManyBooks, 'the', { keys: ['title', 'author'], limit: 10 });
+    seaq(ManyBooks, 'the', { keys: ['title', 'author'], fieldMode: 'joined', fuzziness: 0, limit: 10 });
   });
 });

@@ -3,6 +3,7 @@ import {
   defaultConfigs,
   type EngineKey,
   type EngineConfigs,
+  type ArrayKeyMap,
   type SeaqConfig,
   type FuseConfig,
   type MiniSearchConfig,
@@ -15,6 +16,7 @@ interface ResultsColumnProps {
   name: string;
   query: string;
   keys: string[];
+  arrayKeyMap: ArrayKeyMap;
   result: SearchResult | null;
   config: EngineConfigs[EngineKey];
   onConfigChange: (patch: Partial<EngineConfigs[EngineKey]>) => void;
@@ -41,8 +43,8 @@ function q(s: string): string {
 function seaqSnippet(query: string, keys: string[], config: SeaqConfig): string {
   const opts: string[] = [];
   if (keys.length > 0) opts.push(`keys: [${keys.map(q).join(', ')}]`);
-  if (config.fuzziness != null) opts.push(`fuzziness: ${config.fuzziness}`);
-  if (config.fieldMode !== 'joined') opts.push(`fieldMode: '${config.fieldMode}'`);
+  if (config.fuzziness !== 0.2) opts.push(`fuzziness: ${config.fuzziness}`);
+  if (config.fieldMode !== 'separate') opts.push(`fieldMode: '${config.fieldMode}'`);
   if (config.limit != null) opts.push(`limit: ${config.limit}`);
   const optsStr = opts.length > 0 ? `, {\n  ${opts.join(',\n  ')}\n}` : '';
   return `seaq(data, ${q(query)}${optsStr})`;
@@ -64,7 +66,7 @@ function fuseSnippet(query: string, keys: string[], config: FuseConfig): string 
   ].join('\n');
 }
 
-function miniSearchSnippet(query: string, keys: string[], config: MiniSearchConfig): string {
+function miniSearchSnippet(query: string, keys: string[], arrayKeyMap: ArrayKeyMap, config: MiniSearchConfig): string {
   const fields = keys.length > 0 ? keys.map((k) => q(k.replace(/\./g, '_'))).join(', ') : "'text'";
   const searchOpts: string[] = [];
   searchOpts.push(`prefix: ${config.prefix}`);
@@ -73,6 +75,33 @@ function miniSearchSnippet(query: string, keys: string[], config: MiniSearchConf
   if (config.fuzzyWeight !== 0.45 || config.prefixWeight !== 0.375) {
     searchOpts.push(`weights: { fuzzy: ${config.fuzzyWeight}, prefix: ${config.prefixWeight} }`);
   }
+
+  const nestedKeys = keys.filter((k) => k.includes('.'));
+
+  if (nestedKeys.length > 0) {
+    const extractCases = nestedKeys.map((k) => {
+      const flat = k.replace(/\./g, '_');
+      const arrayInfo = arrayKeyMap[k];
+      if (arrayInfo) {
+        return `    if (field === '${flat}')\n      return doc.${arrayInfo.arrayPath}\n        .map(e => e.${arrayInfo.innerPath}).join(' ')`;
+      }
+      return `    if (field === '${flat}')\n      return doc.${k}`;
+    });
+    return [
+      `const ms = new MiniSearch({`,
+      `  fields: [${fields}],`,
+      `  extractField: (doc, field) => {`,
+      ...extractCases,
+      `    return doc[field]`,
+      `  }`,
+      `})`,
+      `ms.addAll(data)`,
+      `ms.search(${q(query)}, {`,
+      `  ${searchOpts.join(',\n  ')}`,
+      `})`,
+    ].join('\n');
+  }
+
   return [
     `const ms = new MiniSearch({`,
     `  fields: [${fields}]`,
@@ -101,9 +130,28 @@ function uFuzzySnippet(query: string, config: UFuzzyConfig): string {
   ].join('\n');
 }
 
-function lunrSnippet(query: string, keys: string[], config: LunrConfig): string {
+function lunrSnippet(query: string, keys: string[], arrayKeyMap: ArrayKeyMap, config: LunrConfig): string {
   const fields = keys.length > 0 ? keys.map((k) => k.replace(/\./g, '_')) : ['text'];
-  const fieldLines = fields.map((f) => `  this.field('${f}')`).join('\n');
+  const fieldLines = fields.map((f, i) => {
+    const origKey = keys[i];
+    if (origKey && origKey.includes('.')) {
+      const arrayInfo = origKey ? arrayKeyMap[origKey] : undefined;
+      if (arrayInfo) {
+        return [
+          `  this.field('${f}', {`,
+          `    extractor: (doc) => doc.${arrayInfo.arrayPath}`,
+          `      .map(e => e.${arrayInfo.innerPath}).join(' ')`,
+          `  })`,
+        ].join('\n');
+      }
+      return [
+        `  this.field('${f}', {`,
+        `    extractor: (doc) => doc.${origKey}`,
+        `  })`,
+      ].join('\n');
+    }
+    return `  this.field('${f}')`;
+  }).join('\n');
   const lines = [
     `const idx = lunr(function() {`,
     `  this.ref('id')`,
@@ -124,7 +172,7 @@ function lunrSnippet(query: string, keys: string[], config: LunrConfig): string 
   return lines.join('\n');
 }
 
-function codeSnippet(engineKey: EngineKey, query: string, keys: string[], config: EngineConfigs[EngineKey]): string {
+function codeSnippet(engineKey: EngineKey, query: string, keys: string[], arrayKeyMap: ArrayKeyMap, config: EngineConfigs[EngineKey]): string {
   const dq = query || '...';
   switch (engineKey) {
     case 'seaq':
@@ -132,11 +180,11 @@ function codeSnippet(engineKey: EngineKey, query: string, keys: string[], config
     case 'fuse':
       return fuseSnippet(dq, keys, config as FuseConfig);
     case 'minisearch':
-      return miniSearchSnippet(dq, keys, config as MiniSearchConfig);
+      return miniSearchSnippet(dq, keys, arrayKeyMap, config as MiniSearchConfig);
     case 'ufuzzy':
       return uFuzzySnippet(dq, config as UFuzzyConfig);
     case 'lunr':
-      return lunrSnippet(dq, keys, config as LunrConfig);
+      return lunrSnippet(dq, keys, arrayKeyMap, config as LunrConfig);
   }
 }
 
@@ -188,24 +236,25 @@ function SeaqControls({ config, onChange }: { config: SeaqConfig; onChange: (p: 
     <>
       <Select
         label="Fuzziness"
-        hint="Typo tolerance. Off = every char must match."
-        value={config.fuzziness ?? 'off'}
+        hint="Typo tolerance. 0 = strict, every char must match."
+        value={config.fuzziness}
         options={[
-          { value: 'off', label: 'Off (strict)' },
+          { value: '0.2', label: '0.2 (default)' },
           { value: '0.1', label: '0.1' },
           { value: '0.3', label: '0.3' },
           { value: '0.5', label: '0.5' },
           { value: '0.8', label: '0.8' },
+          { value: '0', label: '0 (strict)' },
         ]}
-        onChange={(v) => onChange({ fuzziness: v === 'off' ? undefined : Number(v) })}
+        onChange={(v) => onChange({ fuzziness: Number(v) })}
       />
       <Select
         label="Field mode"
-        hint='Joined = cross-field "john smith". Separate = best single field, faster.'
+        hint='Separate = best single field, faster. Joined = cross-field "john smith".'
         value={config.fieldMode}
         options={[
+          { value: 'separate', label: 'separate (default)' },
           { value: 'joined', label: 'joined' },
-          { value: 'separate', label: 'separate' },
         ]}
         onChange={(v) => onChange({ fieldMode: v as 'joined' | 'separate' })}
       />
@@ -447,8 +496,8 @@ function ConfigControls({ engineKey, config, onConfigChange }: ResultsColumnProp
 // ── Main component ──
 
 export function ResultsColumn(props: ResultsColumnProps) {
-  const { name, query, keys, engineKey, config, result } = props;
-  const snippet = codeSnippet(engineKey, query, keys, config);
+  const { name, query, keys, arrayKeyMap, engineKey, config, result } = props;
+  const snippet = codeSnippet(engineKey, query, keys, arrayKeyMap, config);
 
   return (
     <div className="flex min-w-0 flex-1 flex-col rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">

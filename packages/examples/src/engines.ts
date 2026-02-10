@@ -33,16 +33,53 @@ export function searchSeaq(dataset: DatasetConfig, query: string, config: SeaqCo
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic dataset types
     return (seaq as any)(dataset.data, query, {
       ...(keys.length > 0 ? { keys } : {}),
-      ...(config.fuzziness != null ? { fuzziness: config.fuzziness } : {}),
+      fuzziness: config.fuzziness,
       fieldMode: config.fieldMode,
       ...(config.limit != null ? { limit: config.limit } : {}),
-    });
+      includeMatches: true,
+    }) as { item: unknown; score: number; matches: { key?: string; value: string; indices: [number, number][]; score: number }[] }[];
   });
   const top = result.slice(0, 10);
   return {
-    results: top.map(dataset.displayFn),
-    highlighted: top.map((item) => buildFieldsHtml(item, dataset.keys, (val) => esc(val))),
-    items: top,
+    results: top.map((r) => dataset.displayFn(r.item)),
+    highlighted: top.map((r) => {
+      const match = r.matches?.[0];
+      if (match && keys.length === 0) {
+        // String/no-keys mode: highlight directly using indices
+        return highlightRanges(match.value, match.indices);
+      }
+      if (match && match.key) {
+        // Separate mode: highlight the matched key's value
+        return buildFieldsHtml(r.item, dataset.keys, (val, key) => {
+          if (key === match.key) {
+            if (val === match.value) {
+              return highlightRanges(val, match.indices);
+            }
+            // Array field: val is comma-joined, match.value is a single element.
+            // Find the matched element within the joined string and offset ranges.
+            const idx = val.indexOf(match.value);
+            if (idx !== -1) {
+              const offsetRanges = match.indices.map(
+                ([s, e]) => [s + idx, e + idx] as [number, number],
+              );
+              return highlightRanges(val, offsetRanges);
+            }
+          }
+          return esc(val);
+        });
+      }
+      if (match) {
+        // Joined mode: highlight the joined string's ranges on the individual fields
+        // Map ranges from the joined string back to field values
+        return buildFieldsHtml(r.item, dataset.keys, (val) => {
+          // Use term-based highlighting from the query
+          const terms = query.trim().split(/\s+/).filter(Boolean);
+          return highlightTerms(val, terms);
+        });
+      }
+      return buildFieldsHtml(r.item, dataset.keys, (val) => esc(val));
+    }),
+    items: top.map((r) => r.item),
     timeMs,
     resultCount: result.length,
   };
@@ -135,6 +172,10 @@ function flattenItem(item: unknown, keys: string[]): Record<string, string> {
     let val: unknown = obj;
     for (const part of parts) {
       if (val == null) break;
+      if (Array.isArray(val)) {
+        val = val.map((v) => String((v as Record<string, unknown>)?.[part] ?? '')).join(' ');
+        break;
+      }
       val = (val as Record<string, unknown>)[part];
     }
     flat[flatKey] = String(val ?? '');

@@ -4,10 +4,33 @@
 import { string_score } from './string_score';
 
 /**
+ * Match metadata for a single scored field.
+ */
+export interface SeaqMatch {
+  /** Field key (separate mode only; undefined for string/joined). */
+  key?: string;
+  /** The string that was scored. */
+  value: string;
+  /** Highlight ranges as `[start, end]` pairs (inclusive). */
+  indices: [number, number][];
+  /** Score for this specific match. */
+  score: number;
+}
+
+/**
+ * A search result with match metadata, returned when `includeMatches: true`.
+ */
+export interface SeaqResult<T> {
+  item: T;
+  score: number;
+  matches: SeaqMatch[];
+}
+
+/**
  * Configuration for {@link seaq} search behavior.
  *
  * All options are optional — calling `seaq(list, query)` with no options
- * searches plain string arrays with strict (non-fuzzy) matching.
+ * searches plain string arrays with light fuzzy matching (fuzziness 0.2).
  */
 export interface SeaqOptions<T> {
   /**
@@ -22,8 +45,8 @@ export interface SeaqOptions<T> {
   /**
    * Fuzziness tolerance for typos, from 0 to 1.
    *
-   * - `undefined` (default) — strict mode, every character must match somewhere
-   * - `0.1–0.3` — light tolerance, catches minor typos like "jonh" → "john"
+   * - `0.2` (default) — light tolerance, catches minor typos like "jonh" → "john"
+   * - `0` — strict mode, every character must match somewhere
    * - `0.5` — moderate tolerance, good general-purpose starting point
    * - `0.8–1` — very loose, matches almost anything (rarely useful)
    */
@@ -31,10 +54,11 @@ export interface SeaqOptions<T> {
   /**
    * How multi-field scoring works when multiple `keys` are provided.
    *
-   * - `'joined'` (default) — concatenates all field values into one string before scoring.
-   *   Supports cross-field queries like "john smith" matching firstName="John" + lastName="Smith".
-   * - `'separate'` — scores each field independently and takes the best match.
-   *   ~50% faster, but cross-field queries won't work.
+   * - `'separate'` (default) — scores each field independently and takes the best match.
+   *   ~30% faster and more precise than joined mode.
+   * - `'joined'` — concatenates all field values into one string before scoring.
+   *   Supports cross-field queries like "john smith" matching firstName="John" + lastName="Smith",
+   *   but can produce noisy results when query characters scatter across fields.
    */
   fieldMode?: 'joined' | 'separate';
   /**
@@ -45,6 +69,12 @@ export interface SeaqOptions<T> {
    * everything and calling `.slice(0, n)` on large result sets.
    */
   limit?: number;
+  /**
+   * When `true`, returns {@link SeaqResult} objects with match metadata
+   * (character positions, matched value, score) instead of plain items.
+   * Useful for building search-result highlighting.
+   */
+  includeMatches?: boolean;
 }
 
 /**
@@ -60,20 +90,24 @@ export interface SeaqOptions<T> {
  * @returns Filtered and sorted array of matching items
  *
  * @example
- * // Search objects by specific keys
+ * // Search objects by specific keys (separate mode + fuzziness 0.2 by default)
  * seaq(contacts, 'john', { keys: ['name', 'email'] })
  *
  * @example
- * // Search with fuzziness for typo tolerance
+ * // Cross-field matching with joined mode
+ * seaq(contacts, 'john smith', { keys: ['firstName', 'lastName'], fieldMode: 'joined' })
+ *
+ * @example
+ * // Strict mode — every character must match, no typo tolerance
+ * seaq(contacts, 'john', { keys: ['name'], fuzziness: 0 })
+ *
+ * @example
+ * // Higher fuzziness for more typo tolerance
  * seaq(contacts, 'jonh', { keys: ['name'], fuzziness: 0.5 })
  *
  * @example
  * // Nested property + array traversal
  * seaq(users, 'admin', { keys: ['roles.name'] })
- *
- * @example
- * // Fast per-field scoring (won't match across fields)
- * seaq(contacts, 'john', { keys: ['firstName', 'lastName'], fieldMode: 'separate' })
  *
  * @example
  * // Get only top 10 results efficiently
@@ -83,23 +117,28 @@ export interface SeaqOptions<T> {
  * // Search a plain string array (no keys needed)
  * seaq(['apple', 'banana'], 'app')
  */
-export function seaq<T>(list: Array<T>, query: string, options?: SeaqOptions<T>): Array<T> {
+export function seaq<T>(list: Array<T>, query: string, options: SeaqOptions<T> & { includeMatches: true }): SeaqResult<T>[];
+export function seaq<T>(list: Array<T>, query: string, options?: SeaqOptions<T>): Array<T>;
+export function seaq<T>(list: Array<T>, query: string, options?: SeaqOptions<T>): Array<T> | SeaqResult<T>[] {
   const keys = options?.keys as string[] | undefined;
-  const fuzziness = options?.fuzziness;
-  const fieldMode = options?.fieldMode ?? 'joined';
+  const fuzziness = options?.fuzziness === undefined ? 0.2 : options.fuzziness;
+  const fieldMode = options?.fieldMode ?? 'separate';
   const limit = options?.limit;
+  const includeMatches = options?.includeMatches ?? false;
 
-  const scored = scoreItems(list, query, keys, fuzziness, fieldMode);
+  const scored = scoreItems(list, query, keys, fuzziness, fieldMode, includeMatches);
 
+  let sorted: Array<MetaDataItem<T>>;
   if (limit !== undefined && limit > 0) {
-    // Use partial sort - only find top N items
-    return getTopN(scored, limit).map((item) => item.item);
+    sorted = getTopN(scored, limit);
+  } else {
+    sorted = scored.sort((a, b) => b.score - a.score);
   }
 
-  // Full sort for all results
-  return scored
-    .sort((a, b) => b.score - a.score)
-    .map((item) => item.item);
+  if (includeMatches) {
+    return sorted.map((m) => ({ item: m.item, score: m.score, matches: m.matches! }));
+  }
+  return sorted.map((m) => m.item);
 }
 
 /**
@@ -182,12 +221,30 @@ function heapifyDown<T>(heap: Array<MetaDataItem<T>>, i: number): void {
   }
 }
 
+function positionsToRanges(positions: number[]): [number, number][] {
+  const ranges: [number, number][] = [];
+  let start = positions[0];
+  let end = positions[0];
+  for (let i = 1; i < positions.length; i++) {
+    if (positions[i] === end + 1) {
+      end = positions[i];
+    } else {
+      ranges.push([start, end]);
+      start = positions[i];
+      end = positions[i];
+    }
+  }
+  ranges.push([start, end]);
+  return ranges;
+}
+
 function scoreItems<T>(
   list: T[],
   query: string,
   keys: string[] | undefined,
   fuzziness: number | undefined,
   fieldMode: 'joined' | 'separate',
+  includeMatches: boolean,
 ): Array<MetaDataItem<T>> {
   // Pre-lowercase query once instead of per-item
   const lowerQuery = query.toLowerCase();
@@ -196,37 +253,66 @@ function scoreItems<T>(
 
   for (const item of list) {
     let score: number;
+    let matches: SeaqMatch[] | undefined;
 
     if (keys) {
       if (fieldMode === 'separate') {
         // Score each key's values separately, take the best score
         let bestScore = 0;
+        let bestMatch: SeaqMatch | undefined;
         for (const key of keys) {
           const values = getProperty(item, key);
           for (const value of values) {
-            const s = string_score(value, query, fuzziness, lowerQuery);
-            if (s > bestScore) bestScore = s;
+            const positions: number[] | undefined = includeMatches ? [] : undefined;
+            const s = string_score(value, query, fuzziness, lowerQuery, positions);
+            if (s > bestScore) {
+              bestScore = s;
+              if (includeMatches) {
+                bestMatch = { key, value, indices: positionsToRanges(positions!), score: s };
+              }
+            }
           }
         }
         score = bestScore;
+        if (includeMatches && bestMatch) {
+          matches = [bestMatch];
+        }
       } else {
         // Join all field values and score as one string
         const searchString = keys
           .map((key) => getProperty(item, key).join(' '))
           .join(' ');
-        score = string_score(searchString, query, fuzziness, lowerQuery);
+        const positions: number[] | undefined = includeMatches ? [] : undefined;
+        score = string_score(searchString, query, fuzziness, lowerQuery, positions);
+        if (includeMatches && score > 0) {
+          matches = [{ value: searchString, indices: positionsToRanges(positions!), score }];
+        }
       }
     } else if (typeof item === 'string') {
-      score = string_score(item, query, fuzziness, lowerQuery);
+      const positions: number[] | undefined = includeMatches ? [] : undefined;
+      score = string_score(item, query, fuzziness, lowerQuery, positions);
+      if (includeMatches && score > 0) {
+        matches = [{ value: item, indices: positionsToRanges(positions!), score }];
+      }
     } else if (typeof item === 'number') {
-      score = string_score(String(item), query, fuzziness, lowerQuery);
+      const value = String(item);
+      const positions: number[] | undefined = includeMatches ? [] : undefined;
+      score = string_score(value, query, fuzziness, lowerQuery, positions);
+      if (includeMatches && score > 0) {
+        matches = [{ value, indices: positionsToRanges(positions!), score }];
+      }
     } else {
-      score = string_score(JSON.stringify(item), query, fuzziness, lowerQuery);
+      const value = JSON.stringify(item);
+      const positions: number[] | undefined = includeMatches ? [] : undefined;
+      score = string_score(value, query, fuzziness, lowerQuery, positions);
+      if (includeMatches && score > 0) {
+        matches = [{ value, indices: positionsToRanges(positions!), score }];
+      }
     }
 
     // Only include items with score > 0
     if (score > 0) {
-      result.push({ item, score });
+      result.push({ item, score, matches });
     }
   }
 
@@ -236,6 +322,7 @@ function scoreItems<T>(
 interface MetaDataItem<T> {
   item: T;
   score: number;
+  matches?: SeaqMatch[];
 }
 
 /**

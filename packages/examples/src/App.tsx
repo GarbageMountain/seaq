@@ -37,7 +37,7 @@ function discoverStringPaths(item: unknown, prefix = ''): string[] {
 }
 
 export interface SeaqConfig {
-  fuzziness: number | undefined;
+  fuzziness: number;
   fieldMode: 'joined' | 'separate';
   limit: number | undefined;
 }
@@ -73,6 +73,9 @@ export interface LunrConfig {
   editDistance: number;
 }
 
+/** Maps dot-path keys that traverse arrays to their array/inner path segments. */
+export type ArrayKeyMap = Record<string, { arrayPath: string; innerPath: string }>;
+
 export interface EngineConfigs {
   seaq: SeaqConfig;
   fuse: FuseConfig;
@@ -82,7 +85,7 @@ export interface EngineConfigs {
 }
 
 export const defaultConfigs: EngineConfigs = {
-  seaq: { fuzziness: undefined, fieldMode: 'joined', limit: undefined },
+  seaq: { fuzziness: 0.2, fieldMode: 'separate', limit: undefined },
   fuse: { threshold: 0.4, distance: 100, ignoreLocation: false, minMatchCharLength: 2, isCaseSensitive: false, preIndexed: true },
   minisearch: { fuzzy: 0.2, prefix: true, combineWith: 'OR', fuzzyWeight: 1, prefixWeight: 0.8, preIndexed: true },
   ufuzzy: { intraMode: 1, intraSub: 1, intraTrn: 1, intraDel: 1 },
@@ -112,6 +115,29 @@ export function App() {
   );
   const effectiveKeys = selectedKeys.length > 0 ? selectedKeys : rawDs.keys;
   const ds = useMemo(() => ({ ...rawDs, keys: effectiveKeys }), [rawDs, effectiveKeys]);
+
+  // Detect which keys traverse arrays (e.g. emailAddresses.email)
+  const arrayKeyMap = useMemo<ArrayKeyMap>(() => {
+    if (ds.data.length === 0 || typeof ds.data[0] !== 'object') return {};
+    const sample = ds.data[0];
+    const map: ArrayKeyMap = {};
+    for (const key of ds.keys) {
+      const parts = key.split('.');
+      let val: unknown = sample;
+      for (let i = 0; i < parts.length; i++) {
+        if (val == null) break;
+        val = (val as Record<string, unknown>)[parts[i]!];
+        if (Array.isArray(val) && i < parts.length - 1) {
+          map[key] = {
+            arrayPath: parts.slice(0, i + 1).join('.'),
+            innerPath: parts.slice(i + 1).join('.'),
+          };
+          break;
+        }
+      }
+    }
+    return map;
+  }, [ds.data, ds.keys]);
 
   // Clear caches and key selection when dataset changes
   useEffect(() => {
@@ -206,6 +232,7 @@ export function App() {
             name={engineNames[engine]}
             query={query}
             keys={ds.keys}
+            arrayKeyMap={arrayKeyMap}
             result={results[engine]}
             config={configs[engine]}
             onConfigChange={(patch) => updateConfig(engine, patch)}

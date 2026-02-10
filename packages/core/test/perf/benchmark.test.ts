@@ -18,7 +18,7 @@ describe('compare with fusejs', () => {
 
   it('seaqs', () => {
     const start = performance.now();
-    const seaqResults = seaq(Books, 'hi', { keys: ['title', 'author.firstName'] });
+    const seaqResults = seaq(Books, 'hi', { keys: ['title', 'author.firstName'], fieldMode: 'joined', fuzziness: 0 });
     console.log(performance.now() - start);
     expect(seaqResults.length).toBe(9);
   });
@@ -41,13 +41,13 @@ describe('compare with fusejs', () => {
 
   it('seaqs big', () => {
     let start = performance.now();
-    const seaqResults = seaq(ManyBooks, 'cons con', { keys: ['title', 'author'] });
+    const seaqResults = seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'joined', fuzziness: 0 });
     console.log(performance.now() - start);
     expect(seaqResults.length).toBe(81);
     expect(seaqResults[0].title).toBe('Consectetur corporis nobis.');
     expect(seaqResults[0].author).toBe('Odie Cronin');
     start = performance.now();
-    const seaqResults2 = seaq(ManyBooks, 'cons con', { keys: ['title', 'author'] });
+    const seaqResults2 = seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'joined', fuzziness: 0 });
     console.log(performance.now() - start);
     expect(seaqResults2[0].author).toBe('Odie Cronin');
   });
@@ -70,13 +70,13 @@ describe('compare with fusejs', () => {
 
   it('seaqs biggest', () => {
     let start = performance.now();
-    const seaqResults = seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'] });
+    const seaqResults = seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0 });
     console.log(performance.now() - start);
     expect(seaqResults.length).toBe(1);
     expect(seaqResults[0].givenName).toBe('Natasha');
     expect(seaqResults[0].familyName).toBe("O'Keefe");
     start = performance.now();
-    const seaqResults2 = seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'] });
+    const seaqResults2 = seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0 });
     console.log(performance.now() - start);
     expect(seaqResults2[0].givenName).toBe('Natasha');
   });

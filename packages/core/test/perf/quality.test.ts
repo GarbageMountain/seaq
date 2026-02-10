@@ -195,14 +195,14 @@ describe('Feature: Nested Object Access', () => {
   // seaq can search nested properties like 'address.city'
 
   test('seaq searches nested properties', () => {
-    const results = seaq(people, 'New York', { keys: ['address.city'] });
+    const results = seaq(people, 'New York', { keys: ['address.city'], fuzziness: 0 });
     expect(results.length).toBe(2);
     expect(results.every(r => r.address.city === 'New York')).toBe(true);
   });
 
   test('seaq searches deeply nested arrays', () => {
     // Search for email address inside array of email objects
-    const results = seaq(nestedData, 'bigcorp', { keys: ['emails.address'] });
+    const results = seaq(nestedData, 'bigcorp', { keys: ['emails.address'], fuzziness: 0 });
     expect(results.length).toBe(1);
     expect(results[0]?.name).toBe('Charlie');
   });
