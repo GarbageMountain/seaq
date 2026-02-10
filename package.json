@@ -16,7 +16,8 @@
     "check:fix": "biome check --write .",
     "ts-check": "tsc --build --incremental",
     "dev": "yarn workspace seaq build && (yarn workspace seaq dev & yarn workspace @seaq/examples dev & wait)",
-    "clean": "rm -rf .tsc-out packages/*/dist"
+    "clean": "rm -rf .tsc-out packages/*/dist",
+    "bench:save": "yarn workspace seaq bench:save"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",

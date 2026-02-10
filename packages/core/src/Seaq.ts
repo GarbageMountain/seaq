@@ -315,6 +315,9 @@ function scoreItems<T>(
     : null;
   const lowerTokens = tokens?.map(t => t.toLowerCase());
 
+  const queryMask = charMask(lowerQuery);
+  const tokenMasks = lowerTokens?.map(t => charMask(t));
+
   const result: Array<MetaDataItem<T>> = [];
   let maxScore = 0;
 
@@ -325,14 +328,13 @@ function scoreItems<T>(
 
     if (keys) {
       if (fieldMode === 'separate') {
-        // Cache field values + lowercased versions once per item
-        const fieldValues: { key: string; values: string[]; lowerValues: string[] }[] = keys.map(key => {
+        // Cache field values + lowercased versions + char masks once per item
+        const fieldValues = keys.map(key => {
           const values = getProperty(item, key);
-          return { key, values, lowerValues: values.map(v => v.toLowerCase()) };
+          const lowerValues = values.map(v => v.toLowerCase());
+          const masks = lowerValues.map(lv => charMask(lv));
+          return { key, values, lowerValues, masks };
         });
-
-        // Pre-compute first-char for strict-mode pre-rejection
-        const lowerQueryChar0 = lowerQuery.charAt(0);
 
         // Path A: score full query against each field, take best
         let bestScore = 0;
@@ -341,9 +343,12 @@ function scoreItems<T>(
         for (let fi = 0; fi < fieldValues.length; fi++) {
           const field = fieldValues[fi];
           for (let vi = 0; vi < field.values.length; vi++) {
-            // Strict mode: skip guaranteed zeros (first char absent → score is 0)
-            if (!fuzziness && field.lowerValues[vi].indexOf(lowerQueryChar0) === -1) continue;
-            const s = string_score(field.values[vi], query, fuzziness, lowerQuery);
+            // Bitmask pre-filter: O(1) character-set rejection
+            // Strict: reject if ANY query char type is missing from value
+            if (!fuzziness && (queryMask & ~field.masks[vi]) !== 0) continue;
+            // Fuzzy: reject if ZERO char overlap (guaranteed score 0)
+            if (fuzziness && (queryMask & field.masks[vi]) === 0) continue;
+            const s = string_score(field.values[vi], query, fuzziness, lowerQuery, undefined, field.lowerValues[vi]);
             if (s > bestScore) {
               bestScore = s;
               winFieldIdx = fi;
@@ -361,9 +366,12 @@ function scoreItems<T>(
           if (isCandidate) {
             for (let t = 0; t < lowerTokens.length; t++) {
               let tokenFound = false;
-              for (const field of fieldValues) {
-                for (const lv of field.lowerValues) {
-                  if (hasSubsequence(lv, lowerTokens[t])) { tokenFound = true; break; }
+              for (let fi = 0; fi < fieldValues.length; fi++) {
+                const field = fieldValues[fi];
+                for (let vi = 0; vi < field.lowerValues.length; vi++) {
+                  // Bitmask gate: if any token char type is absent, subsequence is impossible
+                  if ((tokenMasks![t] & ~field.masks[vi]) !== 0) continue;
+                  if (hasSubsequence(field.lowerValues[vi], lowerTokens[t])) { tokenFound = true; break; }
                 }
                 if (tokenFound) break;
               }
@@ -379,13 +387,13 @@ function scoreItems<T>(
               let bestTokenScore = 0;
               let bestTokenFieldIdx = 0;
               let bestTokenValueIdx = 0;
-              const lowerTokenChar0 = lowerTokens[t].charAt(0);
               for (let fi = 0; fi < fieldValues.length; fi++) {
                 const field = fieldValues[fi];
                 for (let vi = 0; vi < field.values.length; vi++) {
-                  // Strict mode: skip guaranteed zeros
-                  if (!fuzziness && field.lowerValues[vi].indexOf(lowerTokenChar0) === -1) continue;
-                  const s = string_score(field.values[vi], tokens[t], fuzziness, lowerTokens[t]);
+                  // Bitmask pre-filter: O(1) character-set rejection
+                  if (!fuzziness && (tokenMasks![t] & ~field.masks[vi]) !== 0) continue;
+                  if (fuzziness && (tokenMasks![t] & field.masks[vi]) === 0) continue;
+                  const s = string_score(field.values[vi], tokens[t], fuzziness, lowerTokens[t], undefined, field.lowerValues[vi]);
                   if (s > bestTokenScore) {
                     bestTokenScore = s;
                     bestTokenFieldIdx = fi;
@@ -474,6 +482,19 @@ function hasSubsequence(value: string, token: string): boolean {
     if (value[vi] === token[ti]) ti++;
   }
   return ti === token.length;
+}
+
+/**
+ * Build a bitmask where bits 0-25 represent a-z presence, bit 26 catches everything else.
+ * Enables O(1) character-set containment checks before expensive scoring.
+ */
+export function charMask(lower: string): number {
+  let mask = 0;
+  for (let i = 0; i < lower.length; i++) {
+    const c = lower.charCodeAt(i) - 97;
+    mask |= 1 << (c >= 0 && c < 26 ? c : 26);
+  }
+  return mask;
 }
 
 type WinDescriptor =

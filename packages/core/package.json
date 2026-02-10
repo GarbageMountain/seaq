@@ -45,7 +45,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "benchmark": "vitest bench"
+    "benchmark": "vitest bench",
+    "bench:save": "vitest bench --outputJson benchmarks/$(git rev-parse --short HEAD).json"
   },
   "devDependencies": {
     "@leeoniya/ufuzzy": "^1.0.19",

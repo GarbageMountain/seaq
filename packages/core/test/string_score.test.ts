@@ -121,6 +121,43 @@ describe('string_score', () => {
     });
   });
 
+  describe('pre-lowered target', () => {
+    test('passing lowerTarget produces same result (strict)', () => {
+      const target = 'Hello World';
+      const query = 'hel';
+      const without = string_score(target, query);
+      const withLower = string_score(target, query, undefined, query.toLowerCase(), undefined, target.toLowerCase());
+      expect(withLower).toBe(without);
+    });
+
+    test('passing lowerTarget produces same result (fuzzy)', () => {
+      const target = 'Hello World';
+      const query = 'hxl';
+      const without = string_score(target, query, 0.5);
+      const withLower = string_score(target, query, 0.5, query.toLowerCase(), undefined, target.toLowerCase());
+      expect(withLower).toBe(without);
+    });
+
+    test('works with mixed case and acronyms', () => {
+      const target = 'Hillsdale Michigan';
+      const query = 'HiMi';
+      const without = string_score(target, query, 0);
+      const withLower = string_score(target, query, 0, query.toLowerCase(), undefined, target.toLowerCase());
+      expect(withLower).toBe(without);
+    });
+
+    test('works with positions array', () => {
+      const target = 'Hello World';
+      const query = 'hel';
+      const pos1: number[] = [];
+      const pos2: number[] = [];
+      const s1 = string_score(target, query, 0, undefined, pos1);
+      const s2 = string_score(target, query, 0, query.toLowerCase(), pos2, target.toLowerCase());
+      expect(s2).toBe(s1);
+      expect(pos2).toEqual(pos1);
+    });
+  });
+
   describe('consecutive bonus after fuzzy skip', () => {
     test('skipped char should not grant consecutive bonus to next match', () => {
       // "btn" vs "tsconfig.json": 'b' is not found (fuzzy skip), then 't' at

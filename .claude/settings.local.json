@@ -13,7 +13,8 @@
       "Bash(npx vite:*)",
       "WebSearch",
       "WebFetch(domain:www.fusejs.io)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "ask": []

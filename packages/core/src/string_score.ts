@@ -17,6 +17,9 @@
  *   degrade the score instead of returning 0 immediately.
  * @param lowerQuery - Pre-lowercased query for performance (avoids repeated `.toLowerCase()` calls).
  *   Computed automatically if omitted.
+ * @param positions - Optional array to collect matched character positions.
+ * @param lowerTarget - Pre-lowercased target for performance (avoids repeated `.toLowerCase()` calls).
+ *   Computed automatically if omitted.
  * @returns Score between 0 (no match) and 1 (perfect match)
  */
 export function string_score(
@@ -25,6 +28,7 @@ export function string_score(
   fuzziness?: number,
   lowerQuery?: string,
   positions?: number[],
+  lowerTarget?: string,
 ): number {
   // If the string is equal to the word, perfect match.
   if (target === query) {
@@ -40,7 +44,7 @@ export function string_score(
   let charScore: number;
   let finalScore: number;
   const rawString = target;
-  const lString = rawString.toLowerCase();
+  const lString = lowerTarget ?? rawString.toLowerCase();
   const strLength = rawString.length;
   const lWord = lowerQuery ?? query.toLowerCase();
   const wordLength = query.length;

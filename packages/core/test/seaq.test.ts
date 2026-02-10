@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { seaq, SeaqResult } from '../src/index';
+import { charMask } from '../src/Seaq';
 import Contacts from '@seaq/test-data/contacts-1k.json';
 import ManyContacts from '@seaq/test-data/contacts-10k.json';
 
@@ -774,5 +775,98 @@ describe('regression guards', () => {
     expect(withThreshold.length).toBeLessThan(500);
     expect(withThreshold.length).toBeGreaterThan(0);
     expect((withThreshold[0] as any).givenName.toLowerCase()).toContain('nath');
+  });
+});
+
+describe('charMask', () => {
+  test('empty string returns 0', () => {
+    expect(charMask('')).toBe(0);
+  });
+
+  test('single lowercase letter sets correct bit', () => {
+    // 'a' → bit 0, 'b' → bit 1, 'z' → bit 25
+    expect(charMask('a')).toBe(1 << 0);
+    expect(charMask('b')).toBe(1 << 1);
+    expect(charMask('z')).toBe(1 << 25);
+  });
+
+  test('non-alpha chars set bit 26', () => {
+    expect(charMask('1')).toBe(1 << 26);
+    expect(charMask(' ')).toBe(1 << 26);
+    expect(charMask('_')).toBe(1 << 26);
+    expect(charMask('@')).toBe(1 << 26);
+  });
+
+  test('repeated chars are idempotent', () => {
+    expect(charMask('aaa')).toBe(charMask('a'));
+    expect(charMask('abab')).toBe(charMask('ab'));
+  });
+
+  test('superset/subset check works with bitwise ops', () => {
+    const abc = charMask('abc');
+    const ab = charMask('ab');
+    // ab is a subset of abc
+    expect(ab & ~abc).toBe(0);
+    // abc is NOT a subset of ab
+    expect(abc & ~ab).not.toBe(0);
+  });
+
+  test('mixed alpha and non-alpha', () => {
+    const mask = charMask('a1b');
+    expect(mask & (1 << 0)).not.toBe(0);  // 'a'
+    expect(mask & (1 << 1)).not.toBe(0);  // 'b'
+    expect(mask & (1 << 26)).not.toBe(0); // '1'
+  });
+});
+
+describe('bitmask regression guards', () => {
+  test('fuzzy partial overlap still matches (no false rejections)', () => {
+    // "nath" has chars n,a,t,h — should match "Nathan" which has all of them
+    const results = seaq(ManyContacts as any, 'nath', {
+      keys: ['givenName'],
+      fuzziness: 0.2,
+      limit: Infinity,
+      threshold: 0,
+    });
+    expect(results.length).toBeGreaterThan(0);
+    expect((results[0] as any).givenName.toLowerCase()).toContain('nath');
+  });
+
+  test('strict mode rejects items missing a char type', () => {
+    // "xyz" has no overlap with "hello" — strict bitmask should reject
+    const results = seaq(['hello', 'world', 'xyz'], 'xyz', { fuzziness: 0 });
+    expect(results).toHaveLength(1);
+    expect(results[0]).toBe('xyz');
+  });
+
+  test('non-alpha chars do not cause false rejections (bit-26 bucket)', () => {
+    // Query with underscore and digits should still match
+    const results = seaq(['user_123', 'admin_456'], 'user_1', { fuzziness: 0 });
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]).toBe('user_123');
+  });
+
+  test('multi-word cross-field matches survive bitmask', () => {
+    const people = [
+      { first: 'Helen', last: 'Green' },
+      { first: 'Henry', last: 'Greenberg' },
+    ];
+    const results = seaq(people, 'helen green', { keys: ['first', 'last'] });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'Helen', last: 'Green' }));
+  });
+
+  test('fuzzy multi-word with partial overlap still finds results', () => {
+    // "nath fe" — tokens "nath" and "fe" scored across givenName/familyName
+    const results = seaq(ManyContacts as any, 'nath fe', {
+      keys: ['givenName', 'familyName'],
+      fuzziness: 0.2,
+    });
+    expect(results.length).toBeGreaterThan(0);
+  });
+
+  test('fuzzy mode with zero char overlap correctly rejects', () => {
+    // All query chars completely absent from target
+    const results = seaq(['hello'], 'xyz', { fuzziness: 0.5, limit: Infinity, threshold: 0 });
+    expect(results).toHaveLength(0);
   });
 });

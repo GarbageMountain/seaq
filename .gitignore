@@ -25,4 +25,4 @@ coverage
 *.swp
 
 # Misc
-benchmarks
+packages/core/benchmarks/*.json
