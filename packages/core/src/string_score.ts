@@ -24,6 +24,7 @@ export function string_score(
   query: string,
   fuzziness?: number,
   lowerQuery?: string,
+  positions?: number[],
 ): number {
   // If the string is equal to the word, perfect match.
   if (target === query) {
@@ -64,6 +65,7 @@ export function string_score(
       if (idxOf === -1) {
         fuzzies += fuzzyFactor;
       } else {
+        if (positions) positions.push(idxOf);
         if (startAt === idxOf) {
           // Consecutive letter & start-of-string Bonus
           charScore = 0.7;
@@ -96,6 +98,8 @@ export function string_score(
       if (-1 === idxOf) {
         return 0;
       }
+
+      if (positions) positions.push(idxOf);
 
       if (startAt === idxOf) {
         // Consecutive letter & start-of-string Bonus
