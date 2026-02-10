@@ -36,10 +36,11 @@ export function searchSeaq(dataset: DatasetConfig, query: string, config: SeaqCo
       fuzziness: config.fuzziness,
       fieldMode: config.fieldMode,
       ...(config.limit != null ? { limit: config.limit } : {}),
+      threshold: config.threshold,
       includeMatches: true,
     }) as { item: unknown; score: number; matches: { key?: string; value: string; indices: [number, number][]; score: number }[] }[];
   });
-  const top = result.slice(0, 10);
+  const top = result.slice(0, config.limit ?? 10);
   return {
     results: top.map((r) => dataset.displayFn(r.item)),
     highlighted: top.map((r) => {

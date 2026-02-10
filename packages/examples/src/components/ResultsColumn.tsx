@@ -45,7 +45,8 @@ function seaqSnippet(query: string, keys: string[], config: SeaqConfig): string 
   if (keys.length > 0) opts.push(`keys: [${keys.map(q).join(', ')}]`);
   if (config.fuzziness !== 0.2) opts.push(`fuzziness: ${config.fuzziness}`);
   if (config.fieldMode !== 'separate') opts.push(`fieldMode: '${config.fieldMode}'`);
-  if (config.limit != null) opts.push(`limit: ${config.limit}`);
+  if (config.limit != null && config.limit !== 10) opts.push(`limit: ${config.limit}`);
+  if (config.threshold !== 0.3) opts.push(`threshold: ${config.threshold}`);
   const optsStr = opts.length > 0 ? `, {\n  ${opts.join(',\n  ')}\n}` : '';
   return `seaq(data, ${q(query)}${optsStr})`;
 }
@@ -259,15 +260,30 @@ function SeaqControls({ config, onChange }: { config: SeaqConfig; onChange: (p: 
         onChange={(v) => onChange({ fieldMode: v as 'joined' | 'separate' })}
       />
       <Select
+        label="Threshold"
+        hint="Relative cutoff: drop results below topScore × threshold."
+        value={config.threshold}
+        options={[
+          { value: '0', label: '0 (off)' },
+          { value: '0.1', label: '0.1' },
+          { value: '0.2', label: '0.2' },
+          { value: '0.3', label: '0.3 (default)' },
+          { value: '0.5', label: '0.5' },
+          { value: '0.7', label: '0.7' },
+          { value: '1', label: '1 (exact only)' },
+        ]}
+        onChange={(v) => onChange({ threshold: Number(v) })}
+      />
+      <Select
         label="Limit"
         hint="Max results. Uses min-heap for O(n log k) efficiency."
         value={config.limit ?? 'off'}
         options={[
-          { value: 'off', label: 'All' },
-          { value: '10', label: '10' },
+          { value: '10', label: '10 (default)' },
           { value: '25', label: '25' },
           { value: '50', label: '50' },
           { value: '100', label: '100' },
+          { value: 'off', label: 'All' },
         ]}
         onChange={(v) => onChange({ limit: v === 'off' ? undefined : Number(v) })}
       />

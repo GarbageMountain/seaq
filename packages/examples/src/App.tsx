@@ -51,6 +51,7 @@ export interface SeaqConfig {
   fuzziness: number;
   fieldMode: 'joined' | 'separate';
   limit: number | undefined;
+  threshold: number;
 }
 
 export interface FuseConfig {
@@ -96,7 +97,7 @@ export interface EngineConfigs {
 }
 
 export const defaultConfigs: EngineConfigs = {
-  seaq: { fuzziness: 0.2, fieldMode: 'separate', limit: undefined },
+  seaq: { fuzziness: 0.2, fieldMode: 'separate', limit: 10, threshold: 0.3 },
   fuse: { threshold: 0.4, distance: 100, ignoreLocation: false, minMatchCharLength: 2, isCaseSensitive: false, preIndexed: true },
   minisearch: { fuzzy: 0.2, prefix: true, combineWith: 'OR', fuzzyWeight: 1, prefixWeight: 0.8, preIndexed: true },
   ufuzzy: { intraMode: 1, intraSub: 1, intraTrn: 1, intraDel: 1 },
