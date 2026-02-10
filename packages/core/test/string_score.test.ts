@@ -94,6 +94,15 @@ describe('string_score', () => {
       const highFuzzy = string_score('hello world', 'hxllo', 0.8);
       expect(highFuzzy).toBeGreaterThan(lowFuzzy);
     });
+
+    test('first-char miss yields > 0 in fuzzy mode', () => {
+      // Guard: fuzzy mode must still score > 0 when first char is absent
+      // but some later chars match. Prevents strict-mode first-char
+      // pre-rejection from leaking into fuzzy mode.
+      // 'x' misses, but 'b','c' match in 'abcdef'
+      const score = string_score('abcdef', 'xbc', 0.5);
+      expect(score).toBeGreaterThan(0);
+    });
   });
 
   describe('pre-lowered query optimization', () => {

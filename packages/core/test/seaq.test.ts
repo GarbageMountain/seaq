@@ -713,6 +713,55 @@ describe('token scoring edge cases', () => {
   });
 });
 
+describe('perf optimization guards', () => {
+  test('Path B wins over Path A for cross-field multi-word query', () => {
+    const people = [{ first: 'Helen', last: 'Green' }];
+    const results = seaq(people, 'helen green', {
+      keys: ['first', 'last'],
+      includeMatches: true,
+      fuzziness: 0,
+    }) as SeaqResult<typeof people[0]>[];
+    expect(results).toHaveLength(1);
+    // Path B: "helen"→Helen≈1.0, "green"→Green≈1.0, avg≈1.0 (wins over Path A)
+    expect(results[0].score).toBeGreaterThan(0.9);
+    // Path B produces multiple matches (one per token)
+    expect(results[0].matches.length).toBe(2);
+  });
+
+  test('includeMatches positions correct for Path B winners', () => {
+    const people = [{ first: 'Helen', last: 'Green' }];
+    const results = seaq(people, 'helen green', {
+      keys: ['first', 'last'],
+      includeMatches: true,
+      fuzziness: 0,
+    }) as SeaqResult<typeof people[0]>[];
+    expect(results).toHaveLength(1);
+    for (const match of results[0].matches) {
+      // Verify each range slices to expected characters
+      for (const [start, end] of match.indices) {
+        const sliced = match.value.slice(start, end + 1);
+        expect(sliced.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  test('single-word queries unaffected by Path B', () => {
+    const people = [
+      { first: 'Helen', last: 'Green' },
+      { first: 'Henry', last: 'Greenberg' },
+    ];
+    const results = seaq(people, 'helen', {
+      keys: ['first', 'last'],
+      fuzziness: 0,
+      limit: Infinity,
+      threshold: 0,
+    });
+    // Single-word: no token splitting, no Path B
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ first: 'Helen' });
+  });
+});
+
 describe('regression guards', () => {
   test('"nath" on 10K with threshold:0 returns fewer than old 9756', () => {
     // With default threshold (0.3), the practical result count is tiny

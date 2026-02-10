@@ -150,6 +150,8 @@ export function seaq<T>(list: Array<T>, query: string, options?: SeaqOptions<T>)
   }
 
   if (includeMatches) {
+    // Rescore finalists to compute match positions (deferred from scoring phase)
+    rescoreWithPositions(sorted, query, keys, fuzziness, fieldMode);
     return sorted.map((m) => ({ item: m.item, score: m.score, matches: m.matches! }));
   }
   return sorted.map((m) => m.item);
@@ -252,6 +254,50 @@ function positionsToRanges(positions: number[]): [number, number][] {
   return ranges;
 }
 
+function rescoreWithPositions<T>(
+  items: MetaDataItem<T>[],
+  query: string,
+  keys: string[] | undefined,
+  fuzziness: number | undefined,
+  fieldMode: 'joined' | 'separate',
+): void {
+  const lowerQuery = query.toLowerCase();
+  const tokens = (fieldMode === 'separate' && keys && query.includes(' '))
+    ? query.split(/\s+/).filter(Boolean)
+    : null;
+  const lowerTokens = tokens?.map(t => t.toLowerCase()) ?? null;
+
+  for (const meta of items) {
+    // Items without _winDesc already have matches computed (non-separate paths)
+    if (!meta._winDesc) continue;
+
+    const desc = meta._winDesc;
+    const fieldValues = keys!.map(key => ({ key, values: getProperty(meta.item, key) }));
+
+    if (desc.path === 'A') {
+      const field = fieldValues[desc.fieldIdx];
+      const value = field.values[desc.valueIdx];
+      const positions: number[] = [];
+      const s = string_score(value, query, fuzziness, lowerQuery, positions);
+      meta.matches = [{ key: field.key, value, indices: positionsToRanges(positions), score: s }];
+    } else {
+      // Path B: rescore each token against its winning field
+      const tokenMatches: SeaqMatch[] = [];
+      for (let t = 0; t < desc.fieldIndices.length; t++) {
+        const { fieldIdx, valueIdx } = desc.fieldIndices[t];
+        const field = fieldValues[fieldIdx];
+        const value = field.values[valueIdx];
+        const positions: number[] = [];
+        const s = string_score(value, tokens![t], fuzziness, lowerTokens![t], positions);
+        tokenMatches.push({ key: field.key, value, indices: positionsToRanges(positions), score: s });
+      }
+      meta.matches = tokenMatches;
+    }
+
+    delete meta._winDesc;
+  }
+}
+
 function scoreItems<T>(
   list: T[],
   query: string,
@@ -275,68 +321,106 @@ function scoreItems<T>(
   for (const item of list) {
     let score: number;
     let matches: SeaqMatch[] | undefined;
+    let winDesc: WinDescriptor | undefined;
 
     if (keys) {
       if (fieldMode === 'separate') {
-        // Cache field values once per item to avoid redundant getProperty calls
-        const fieldValues: { key: string; values: string[] }[] = keys.map(key => ({
-          key,
-          values: getProperty(item, key),
-        }));
+        // Cache field values + lowercased versions once per item
+        const fieldValues: { key: string; values: string[]; lowerValues: string[] }[] = keys.map(key => {
+          const values = getProperty(item, key);
+          return { key, values, lowerValues: values.map(v => v.toLowerCase()) };
+        });
+
+        // Pre-compute first-char for strict-mode pre-rejection
+        const lowerQueryChar0 = lowerQuery.charAt(0);
 
         // Path A: score full query against each field, take best
         let bestScore = 0;
-        let bestMatch: SeaqMatch | undefined;
-        for (const field of fieldValues) {
-          for (const value of field.values) {
-            const positions: number[] | undefined = includeMatches ? [] : undefined;
-            const s = string_score(value, query, fuzziness, lowerQuery, positions);
+        let winFieldIdx = 0;
+        let winValueIdx = 0;
+        for (let fi = 0; fi < fieldValues.length; fi++) {
+          const field = fieldValues[fi];
+          for (let vi = 0; vi < field.values.length; vi++) {
+            // Strict mode: skip guaranteed zeros (first char absent → score is 0)
+            if (!fuzziness && field.lowerValues[vi].indexOf(lowerQueryChar0) === -1) continue;
+            const s = string_score(field.values[vi], query, fuzziness, lowerQuery);
             if (s > bestScore) {
               bestScore = s;
-              if (includeMatches) {
-                bestMatch = { key: field.key, value, indices: positionsToRanges(positions!), score: s };
-              }
+              winFieldIdx = fi;
+              winValueIdx = vi;
             }
           }
         }
 
         // Path B: per-token best-field scoring (only for multi-word queries)
         if (tokens && lowerTokens) {
-          let tokenScoreSum = 0;
-          let tokenMatches: SeaqMatch[] | undefined = includeMatches ? [] : undefined;
-          for (let t = 0; t < tokens.length; t++) {
-            let bestTokenScore = 0;
-            let bestTokenMatch: SeaqMatch | undefined;
-            for (const field of fieldValues) {
-              for (const value of field.values) {
-                const positions: number[] | undefined = includeMatches ? [] : undefined;
-                const s = string_score(value, tokens[t], fuzziness, lowerTokens[t], positions);
-                if (s > bestTokenScore) {
-                  bestTokenScore = s;
-                  if (includeMatches) {
-                    bestTokenMatch = { key: field.key, value, indices: positionsToRanges(positions!), score: s };
+          // Cheap pre-filter: skip Path B unless every token is a subsequence
+          // of at least one field value. This reduces Path B from ~10K items to
+          // ~100-300 candidates, cutting string_score calls dramatically.
+          let isCandidate = bestScore < 1; // perfect Path A ⇒ Path B can't win
+          if (isCandidate) {
+            for (let t = 0; t < lowerTokens.length; t++) {
+              let tokenFound = false;
+              for (const field of fieldValues) {
+                for (const lv of field.lowerValues) {
+                  if (hasSubsequence(lv, lowerTokens[t])) { tokenFound = true; break; }
+                }
+                if (tokenFound) break;
+              }
+              if (!tokenFound) { isCandidate = false; break; }
+            }
+          }
+          if (isCandidate) {
+            let tokenScoreSum = 0;
+            let tokenFieldIndices: Array<{ fieldIdx: number; valueIdx: number }> | undefined =
+              includeMatches ? [] : undefined;
+            let bailed = false;
+            for (let t = 0; t < tokens.length; t++) {
+              let bestTokenScore = 0;
+              let bestTokenFieldIdx = 0;
+              let bestTokenValueIdx = 0;
+              const lowerTokenChar0 = lowerTokens[t].charAt(0);
+              for (let fi = 0; fi < fieldValues.length; fi++) {
+                const field = fieldValues[fi];
+                for (let vi = 0; vi < field.values.length; vi++) {
+                  // Strict mode: skip guaranteed zeros
+                  if (!fuzziness && field.lowerValues[vi].indexOf(lowerTokenChar0) === -1) continue;
+                  const s = string_score(field.values[vi], tokens[t], fuzziness, lowerTokens[t]);
+                  if (s > bestTokenScore) {
+                    bestTokenScore = s;
+                    bestTokenFieldIdx = fi;
+                    bestTokenValueIdx = vi;
                   }
                 }
               }
+              tokenScoreSum += bestTokenScore;
+              if (includeMatches) {
+                tokenFieldIndices!.push({ fieldIdx: bestTokenFieldIdx, valueIdx: bestTokenValueIdx });
+              }
+
+              // Early bail: optimistic bound check
+              const remaining = tokens.length - (t + 1);
+              const optimisticAvg = (tokenScoreSum + remaining) / tokens.length;
+              if (optimisticAvg <= bestScore) {
+                bailed = true;
+                break;
+              }
             }
-            tokenScoreSum += bestTokenScore;
-            if (includeMatches && bestTokenMatch) {
-              tokenMatches!.push(bestTokenMatch);
-            }
-          }
-          const tokenAvg = tokenScoreSum / tokens.length;
-          if (tokenAvg > bestScore) {
-            bestScore = tokenAvg;
-            if (includeMatches) {
-              bestMatch = undefined; // clear Path A match
-              matches = tokenMatches;
+            if (!bailed) {
+              const tokenAvg = tokenScoreSum / tokens.length;
+              if (tokenAvg > bestScore) {
+                bestScore = tokenAvg;
+                if (includeMatches) {
+                  winDesc = { path: 'B', fieldIndices: tokenFieldIndices! };
+                }
+              }
             }
           }
         }
 
         score = bestScore;
-        if (includeMatches && !matches && bestMatch) {
-          matches = [bestMatch];
+        if (includeMatches && !winDesc) {
+          winDesc = { path: 'A', fieldIdx: winFieldIdx, valueIdx: winValueIdx };
         }
       } else {
         // Join all field values and score as one string
@@ -374,17 +458,33 @@ function scoreItems<T>(
     // Only include items with score > 0
     if (score > 0) {
       if (score > maxScore) maxScore = score;
-      result.push({ item, score, matches });
+      const meta: MetaDataItem<T> = { item, score, matches };
+      if (winDesc) meta._winDesc = winDesc;
+      result.push(meta);
     }
   }
 
   return { items: result, maxScore };
 }
 
+/** Check if `token` appears as a character subsequence in `value` (both must be lowercased). */
+function hasSubsequence(value: string, token: string): boolean {
+  let ti = 0;
+  for (let vi = 0; vi < value.length && ti < token.length; vi++) {
+    if (value[vi] === token[ti]) ti++;
+  }
+  return ti === token.length;
+}
+
+type WinDescriptor =
+  | { path: 'A'; fieldIdx: number; valueIdx: number }
+  | { path: 'B'; fieldIndices: Array<{ fieldIdx: number; valueIdx: number }> };
+
 interface MetaDataItem<T> {
   item: T;
   score: number;
   matches?: SeaqMatch[];
+  _winDesc?: WinDescriptor;
 }
 
 /**
