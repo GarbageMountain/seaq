@@ -1,13 +1,12 @@
-import Contacts from '../data/1_000Contacts.json';
-import ManyBooks from '../data/10_000Books.json';
-import ManyContacts from '../data/10_000Contacts.json';
-import Books from '../data/fuseBooks.json';
+import type { Contact } from '@seaq/test-data';
+import Contacts from '@seaq/test-data/contacts-1k.json';
+import ManyContacts from '@seaq/test-data/contacts-10k.json';
+import Books from '@seaq/test-data/books.json';
 
 export const data = {
   Books,
-  Contacts,
-  ManyBooks,
-  ManyContacts: ManyContacts as typeof Contacts,
+  Contacts: Contacts as Contact[],
+  ManyContacts: ManyContacts as Contact[],
 };
 
 export const CONSECUTIVE_COUNT = 10;

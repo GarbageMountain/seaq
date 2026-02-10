@@ -4,5 +4,5 @@
   "compilerOptions": {
     "outDir": "./.tsc-out"
   },
-  "references": [{ "path": "packages/core" }, { "path": "packages/examples" }]
+  "references": [{ "path": "packages/test-data" }, { "path": "packages/core" }, { "path": "packages/examples" }]
 }

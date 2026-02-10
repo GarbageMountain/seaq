@@ -1,25 +1,25 @@
 import { describe, expect, test } from 'vitest';
 import { seaq } from '../src/index';
-import Contacts from './data/1_000Contacts.json';
-import ManyContacts from './data/10_000Contacts.json';
+import Contacts from '@seaq/test-data/contacts-1k.json';
+import ManyContacts from '@seaq/test-data/contacts-10k.json';
 
 describe('small collection', () => {
   test('multi-field search', () => {
-    const searchResults = seaq(Contacts, 'merv pre', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0 });
+    const searchResults = seaq(Contacts, 'ray stev', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0 });
     expect(searchResults).toHaveLength(1);
-    expect(searchResults[0]).toMatchObject({ givenName: 'Mervin' });
+    expect(searchResults[0]).toMatchObject({ givenName: 'Raymond' });
   });
 
   test('fuzzy search', () => {
-    const searchResults = seaq(Contacts, 'Flicta', { keys: ['givenName'], fuzziness: 0.5 });
-    expect(searchResults).toHaveLength(938);
-    expect(searchResults[0]).toMatchObject({ givenName: 'Felicita' });
+    const searchResults = seaq(Contacts, 'Juile', { keys: ['givenName'], fuzziness: 0.5, limit: Infinity, threshold: 0 });
+    expect(searchResults).toHaveLength(769);
+    expect(searchResults[0]).toMatchObject({ givenName: 'Julie' });
   });
 
   test('exact search', () => {
-    const searchResults = seaq(Contacts, 'Felicita', { keys: ['givenName'], fuzziness: 0 });
+    const searchResults = seaq(Contacts, 'Leo', { keys: ['givenName'], fuzziness: 0 });
     expect(searchResults).toHaveLength(1);
-    expect(searchResults[0]).toMatchObject({ givenName: 'Felicita' });
+    expect(searchResults[0]).toMatchObject({ givenName: 'Leo' });
   });
 
   test('empty query', () => {
@@ -28,21 +28,25 @@ describe('small collection', () => {
   });
 
   test('nested property search', () => {
-    const searchResults = seaq(Contacts, 'Ruthlfsdot', {
+    const searchResults = seaq(Contacts, 'julie_cook', {
       keys: ['emailAddresses.email', 'phoneNumbers.number'],
       fuzziness: 0,
     });
     expect(searchResults).toHaveLength(1);
     expect(searchResults[0]).toMatchObject({
-      givenName: 'Felicita',
+      givenName: 'Julie',
       emailAddresses: [
         {
-          email: 'Ruthie.Runolfsdottir@gmail.com',
-          label: 'systems',
+          email: 'julie_cook@yahoo.com',
+          label: 'Work',
         },
         {
-          email: 'David49@yahoo.com',
-          label: 'District',
+          email: 'julie.cook47@icloud.com',
+          label: 'Home',
+        },
+        {
+          email: 'juliec@mail.com',
+          label: 'Work',
         },
       ],
     });
@@ -51,21 +55,21 @@ describe('small collection', () => {
 
 describe('large collection', () => {
   test('multi-field search', () => {
-    const searchResults = seaq(ManyContacts as any, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0 });
-    expect(searchResults).toHaveLength(1);
-    expect(searchResults[0]).toMatchObject({ givenName: 'Natasha' });
+    const searchResults = seaq(ManyContacts as any, 'nath ev', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0, limit: Infinity, threshold: 0 });
+    expect(searchResults).toHaveLength(4);
+    expect(searchResults[0]).toMatchObject({ givenName: 'Nathan' });
   });
 
   test('fuzzy search', () => {
-    const searchResults = seaq(ManyContacts as any, 'Natniel', { keys: ['givenName'], fuzziness: 0.5 });
-    expect(searchResults).toHaveLength(9856);
-    expect(searchResults[0]).toMatchObject({ givenName: 'Nathaniel' });
+    const searchResults = seaq(ManyContacts as any, 'Natnah', { keys: ['givenName'], fuzziness: 0.5, limit: Infinity, threshold: 0 });
+    expect(searchResults).toHaveLength(8907);
+    expect(searchResults[0]).toMatchObject({ givenName: 'Nathan' });
   });
 
   test('exact search', () => {
-    const searchResults = seaq(ManyContacts as any, 'Nathaniel', { keys: ['givenName'], fuzziness: 0 });
-    expect(searchResults).toHaveLength(4);
-    expect(searchResults[0]).toMatchObject({ givenName: 'Nathaniel' });
+    const searchResults = seaq(ManyContacts as any, 'Nathan', { keys: ['givenName'], fuzziness: 0, limit: Infinity, threshold: 0 });
+    expect(searchResults).toHaveLength(106);
+    expect(searchResults[0]).toMatchObject({ givenName: 'Nathan' });
   });
 
   test('empty query', () => {
@@ -74,21 +78,15 @@ describe('large collection', () => {
   });
 
   test('nested property search', () => {
-    const searchResults = seaq(ManyContacts as any, 'dwi', {
+    const searchResults = seaq(ManyContacts as any, 'julie', {
       keys: ['emailAddresses.email', 'phoneNumbers.number'],
       fieldMode: 'joined',
       fuzziness: 0,
+      limit: Infinity,
+      threshold: 0,
     });
-    expect(searchResults).toHaveLength(1060);
-    expect(searchResults[0]).toMatchObject({
-      givenName: 'Kim',
-      emailAddresses: [
-        {
-          email: 'Dwight32@hotmail.com',
-          label: 'Buckinghamshire',
-        },
-      ],
-    });
+    expect(searchResults).toHaveLength(263);
+    expect(searchResults[0]).toMatchObject({ givenName: 'Julie' });
   });
 });
 
@@ -118,13 +116,13 @@ describe('extra features', () => {
   });
 
   test('acronym bonus', () => {
-    const searchResults = seaq(['Hillsdale Michigan', 'historymi'], 'HiMi', { fuzziness: 0 });
+    const searchResults = seaq(['Hillsdale Michigan', 'historymi'], 'HiMi', { fuzziness: 0, limit: Infinity, threshold: 0 });
     expect(searchResults).toHaveLength(2);
     expect(searchResults[0]).toBe('Hillsdale Michigan');
   });
 
   test('acronym bonus with fuzziness', () => {
-    const searchResults = seaq(['Hillsdale Michigan', 'historymi'], 'HiMi', { fuzziness: 0.5 });
+    const searchResults = seaq(['Hillsdale Michigan', 'historymi'], 'HiMi', { fuzziness: 0.5, limit: Infinity, threshold: 0 });
     expect(searchResults).toHaveLength(2);
     expect(searchResults[0]).toBe('Hillsdale Michigan');
   });
@@ -149,20 +147,21 @@ describe('limit option', () => {
   test('returns all results sorted when limit exceeds matches', () => {
     // Use a query that matches multiple items but fewer than the limit,
     // exercising the "items.length <= n" sort path in getTopN
-    const allResults = seaq(Contacts, 'merv', { keys: ['givenName', 'familyName'], fuzziness: 0 });
-    const limitResults = seaq(Contacts, 'merv', { keys: ['givenName', 'familyName'], fuzziness: 0, limit: 1000 });
+    const allResults = seaq(Contacts, 'leo', { keys: ['givenName', 'familyName'], fuzziness: 0, limit: Infinity, threshold: 0 });
+    const limitResults = seaq(Contacts, 'leo', { keys: ['givenName', 'familyName'], fuzziness: 0, limit: 1000, threshold: 0 });
     expect(limitResults.length).toBe(allResults.length);
     expect(limitResults).toEqual(allResults);
   });
 
   test('returns same top results as slice (with unique scores)', () => {
     // Use a query that produces more distinct scores
-    const allResults = seaq(ManyContacts as any, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0 });
+    const allResults = seaq(ManyContacts as any, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0, limit: Infinity, threshold: 0 });
     const limitResults = seaq(ManyContacts as any, 'nath fe', {
       keys: ['givenName', 'familyName'],
       fieldMode: 'joined',
       fuzziness: 0,
       limit: 1,
+      threshold: 0,
     });
     // The top result should be the same
     expect(limitResults[0]).toEqual(allResults[0]);
@@ -195,6 +194,8 @@ describe('fieldMode option', () => {
     const results = seaq(contacts, 'john', {
       keys: ['firstName', 'lastName'],
       fuzziness: 0,
+      limit: Infinity,
+      threshold: 0,
     });
     expect(results.length).toBeGreaterThan(0);
     expect(results[0]).toMatchObject({ firstName: 'John' });
@@ -276,6 +277,7 @@ describe('includeMatches', () => {
       keys: ['givenName', 'familyName'],
       includeMatches: true,
       limit: 5,
+      threshold: 0,
     });
     expect(results).toHaveLength(5);
     for (const r of results) {
@@ -310,5 +312,113 @@ describe('includeMatches', () => {
     expect(results[0].item).toEqual({ x: 'hello' });
     expect(results[0].matches[0].value).toBe(JSON.stringify({ x: 'hello' }));
     expect(results[0].matches[0].indices.length).toBeGreaterThan(0);
+  });
+});
+
+describe('threshold option', () => {
+  test('threshold filters low-scoring fuzzy results', () => {
+    // With threshold: 0, fuzziness returns tons of results
+    const noThreshold = seaq(ManyContacts as any, 'nath', {
+      keys: ['givenName'],
+      fuzziness: 0.2,
+      limit: Infinity,
+      threshold: 0,
+    });
+    // With default threshold (0.3), many low-scoring results are dropped
+    const withThreshold = seaq(ManyContacts as any, 'nath', {
+      keys: ['givenName'],
+      fuzziness: 0.2,
+      limit: Infinity,
+      threshold: 0.3,
+    });
+    expect(withThreshold.length).toBeLessThan(noThreshold.length);
+    expect(withThreshold.length).toBeGreaterThan(0);
+    // Top result should still be a Nathan-like name
+    expect((withThreshold[0] as any).givenName.toLowerCase()).toContain('nath');
+  });
+
+  test('threshold: 0 returns everything above score 0 (old behavior)', () => {
+    const results = seaq(ManyContacts as any, 'nath', {
+      keys: ['givenName'],
+      fuzziness: 0.2,
+      limit: Infinity,
+      threshold: 0,
+    });
+    // Should return the huge count we used to get
+    expect(results.length).toBeGreaterThan(1000);
+  });
+
+  test('threshold: 1 returns only exact/near-exact matches', () => {
+    const results = seaq(['Nathan', 'Nathaniel', 'Jonathan', 'math', 'bath'], 'nath', {
+      fuzziness: 0,
+      limit: Infinity,
+      threshold: 1,
+    });
+    // Only the best-scoring items survive (score must equal maxScore)
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.length).toBeLessThanOrEqual(2);
+  });
+
+  test('threshold works with includeMatches', () => {
+    const results = seaq(ManyContacts as any, 'nath', {
+      keys: ['givenName'],
+      fuzziness: 0.2,
+      includeMatches: true,
+      threshold: 0.3,
+    });
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.length).toBeLessThanOrEqual(10); // default limit
+    for (const r of results) {
+      expect(r).toHaveProperty('item');
+      expect(r).toHaveProperty('score');
+      expect(r).toHaveProperty('matches');
+    }
+  });
+});
+
+describe('fuzzy ranking correctness', () => {
+  test('file path with matching subsequence outranks shorter unrelated path', () => {
+    // "btn" should rank "Button.tsx" above "tsconfig.json" — the former
+    // contains the full b-t-n subsequence in "Button", the latter matches
+    // only because fuzziness lets 'b' be skipped.
+    const paths = [
+      'tsconfig.json',
+      'src/components/Button.tsx',
+      'package.json',
+      'tests/App.test.tsx',
+    ];
+    const results = seaq(paths, 'btn', { fuzziness: 0.2, limit: Infinity, threshold: 0, includeMatches: true });
+    const buttonIdx = results.findIndex((r) => r.item === 'src/components/Button.tsx');
+    const tsconfigIdx = results.findIndex((r) => r.item === 'tsconfig.json');
+    expect(buttonIdx).not.toBe(-1);
+    expect(tsconfigIdx).not.toBe(-1);
+    expect(buttonIdx).toBeLessThan(tsconfigIdx);
+  });
+});
+
+describe('default limit', () => {
+  test('default limit is 10', () => {
+    const results = seaq(ManyContacts as any, 'a', {
+      keys: ['givenName'],
+      threshold: 0,
+    });
+    expect(results).toHaveLength(10);
+  });
+
+  test('limit: Infinity with threshold still filters', () => {
+    const allResults = seaq(ManyContacts as any, 'nath', {
+      keys: ['givenName'],
+      fuzziness: 0.2,
+      limit: Infinity,
+      threshold: 0,
+    });
+    const filteredResults = seaq(ManyContacts as any, 'nath', {
+      keys: ['givenName'],
+      fuzziness: 0.2,
+      limit: Infinity,
+      threshold: 0.3,
+    });
+    expect(filteredResults.length).toBeLessThan(allResults.length);
+    expect(filteredResults.length).toBeGreaterThan(0);
   });
 });

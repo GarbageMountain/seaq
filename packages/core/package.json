@@ -48,8 +48,8 @@
     "benchmark": "vitest bench"
   },
   "devDependencies": {
-    "@faker-js/faker": "^10.1.0",
     "@leeoniya/ufuzzy": "^1.0.19",
+    "@seaq/test-data": "workspace:*",
     "@types/lunr": "^2.3.7",
     "fuse.js": "^7.1.0",
     "lunr": "^2.3.9",

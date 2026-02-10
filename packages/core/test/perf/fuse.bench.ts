@@ -2,7 +2,7 @@ import Fuse from 'fuse.js';
 import { bench, describe } from 'vitest';
 import { CONSECUTIVE_COUNT, data } from './common';
 
-const { Books, ManyBooks, ManyContacts } = data;
+const { Books, ManyContacts } = data;
 
 describe('fuse - single search', () => {
   bench('23-books', () => {
@@ -10,13 +10,6 @@ describe('fuse - single search', () => {
       keys: ['title', 'author.firstName'],
     });
     fuse.search('hi');
-  });
-
-  bench('10,000-books', () => {
-    const fuse = new Fuse(ManyBooks, {
-      keys: ['title', 'author'],
-    });
-    fuse.search('cons con');
   });
 
   bench('10,000-contacts', () => {
@@ -34,15 +27,6 @@ describe(`fuse - ${CONSECUTIVE_COUNT} consecutive searches`, () => {
     });
     for (let index = 0; index < CONSECUTIVE_COUNT; index++) {
       fuse.search('hi');
-    }
-  });
-
-  bench('10,000-books', () => {
-    const fuse = new Fuse(ManyBooks, {
-      keys: ['title', 'author'],
-    });
-    for (let index = 0; index < CONSECUTIVE_COUNT; index++) {
-      fuse.search('cons con');
     }
   });
 

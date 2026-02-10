@@ -4,24 +4,10 @@ import { seaq } from '../../src/index';
 import { seaq as seaqV1 } from '../../../../node_modules/seaq/dist/seaq.esm.js';
 import { CONSECUTIVE_COUNT, data } from './common';
 
-const { Books, ManyBooks, ManyContacts } = data;
+const { Books, ManyContacts } = data;
 
 // Simple string array for no-keys testing
 const stringArray = ManyContacts.map((c) => `${c.givenName} ${c.familyName}`);
-
-describe('seaq v1 vs v2 - 10K books', () => {
-  bench('v1 (published)', () => {
-    seaqV1(ManyBooks, 'cons con', ['title', 'author']);
-  });
-
-  bench('v2 (joined)', () => {
-    seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'joined', fuzziness: 0 });
-  });
-
-  bench('v2 (separate)', () => {
-    seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'separate', fuzziness: 0 });
-  });
-});
 
 describe('seaq v1 vs v2 - 10K contacts', () => {
   bench('v1 (published)', () => {
@@ -42,10 +28,6 @@ describe('seaq - single search (joined mode)', () => {
     seaq(Books, 'hi', { keys: ['title', 'author.firstName'], fieldMode: 'joined', fuzziness: 0 });
   });
 
-  bench('10,000-books', () => {
-    seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'joined', fuzziness: 0 });
-  });
-
   bench('10,000-contacts', () => {
     seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0 });
   });
@@ -54,10 +36,6 @@ describe('seaq - single search (joined mode)', () => {
 describe('seaq - single search (separate mode)', () => {
   bench('23-books', () => {
     seaq(Books, 'hi', { keys: ['title', 'author.firstName'], fieldMode: 'separate', fuzziness: 0 });
-  });
-
-  bench('10,000-books', () => {
-    seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'separate', fuzziness: 0 });
   });
 
   bench('10,000-contacts', () => {
@@ -84,12 +62,6 @@ describe(`seaq - ${CONSECUTIVE_COUNT} consecutive searches (joined mode)`, () =>
     }
   });
 
-  bench('10,000-books', () => {
-    for (let index = 0; index < CONSECUTIVE_COUNT; index++) {
-      seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'joined', fuzziness: 0 });
-    }
-  });
-
   bench('10,000-contacts', () => {
     for (let index = 0; index < CONSECUTIVE_COUNT; index++) {
       seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0 });
@@ -106,13 +78,6 @@ describe('seaq - includeMatches overhead (joined)', () => {
     seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0, includeMatches: true });
   });
 
-  bench('10K books - without includeMatches', () => {
-    seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'joined', fuzziness: 0 });
-  });
-
-  bench('10K books - with includeMatches', () => {
-    seaq(ManyBooks, 'cons con', { keys: ['title', 'author'], fieldMode: 'joined', fuzziness: 0, includeMatches: true });
-  });
 });
 
 describe('seaq - includeMatches overhead (separate)', () => {
@@ -134,11 +99,4 @@ describe('seaq - top 10 results (slice vs limit)', () => {
     seaq(ManyContacts, 'na', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0, limit: 10 });
   });
 
-  bench('10,000-books - slice(0,10) [current way]', () => {
-    seaq(ManyBooks, 'the', { keys: ['title', 'author'], fieldMode: 'joined', fuzziness: 0 }).slice(0, 10);
-  });
-
-  bench('10,000-books - limit: 10 [optimized]', () => {
-    seaq(ManyBooks, 'the', { keys: ['title', 'author'], fieldMode: 'joined', fuzziness: 0, limit: 10 });
-  });
 });

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@leeoniya/ufuzzy": "^1.0.19",
+    "@seaq/test-data": "workspace:*",
     "fuse.js": "^7.1.0",
     "lunr": "^2.3.9",
     "minisearch": "^7.2.0",

@@ -2,7 +2,7 @@ import lunr from 'lunr';
 import { bench, describe } from 'vitest';
 import { CONSECUTIVE_COUNT, data } from './common';
 
-const { Books, ManyBooks, ManyContacts } = data;
+const { Books, ManyContacts } = data;
 
 describe('lunr - single search', () => {
   bench('23-books', () => {
@@ -19,22 +19,6 @@ describe('lunr - single search', () => {
     });
 
     search.search('hi');
-  });
-
-  bench('10,000-books', () => {
-    const search = lunr(function () {
-      this.field('title');
-      this.field('author');
-
-      ManyBooks.forEach((book) => {
-        this.add({
-          title: book.title,
-          author: book.author,
-        });
-      });
-    });
-
-    search.search('cons con');
   });
 
   bench('10,000-contacts', () => {
@@ -70,24 +54,6 @@ describe(`lunr - ${CONSECUTIVE_COUNT} consecutive searches`, () => {
 
     for (let index = 0; index < CONSECUTIVE_COUNT; index++) {
       search.search('hi');
-    }
-  });
-
-  bench('10,000-books', () => {
-    const search = lunr(function () {
-      this.field('title');
-      this.field('author');
-
-      ManyBooks.forEach((book) => {
-        this.add({
-          title: book.title,
-          author: book.author,
-        });
-      });
-    });
-
-    for (let index = 0; index < CONSECUTIVE_COUNT; index++) {
-      search.search('cons con');
     }
   });
 

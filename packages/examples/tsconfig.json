@@ -9,5 +9,6 @@
     "declarationMap": false,
     "emitDeclarationOnly": false
   },
-  "include": ["src"]
+  "include": ["src"],
+  "references": [{ "path": "../test-data" }]
 }

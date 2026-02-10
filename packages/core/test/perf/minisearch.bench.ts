@@ -2,7 +2,7 @@ import MiniSearch from 'minisearch';
 import { bench, describe } from 'vitest';
 import { CONSECUTIVE_COUNT, data } from './common';
 
-const { Books, ManyBooks, ManyContacts } = data;
+const { Books, ManyContacts } = data;
 
 describe('minisearch - single search', () => {
   bench('23-books', () => {
@@ -12,15 +12,6 @@ describe('minisearch - single search', () => {
     });
     ms.addAll(Books.map((b, i) => ({ id: i, title: b.title, authorFirstName: b.author.firstName })));
     ms.search('hi');
-  });
-
-  bench('10,000-books', () => {
-    const ms = new MiniSearch({
-      fields: ['title', 'author'],
-      storeFields: ['title', 'author'],
-    });
-    ms.addAll(ManyBooks.map((b, i) => ({ id: i, title: b.title, author: b.author })));
-    ms.search('cons con');
   });
 
   bench('10,000-contacts', () => {
@@ -42,17 +33,6 @@ describe(`minisearch - ${CONSECUTIVE_COUNT} consecutive searches`, () => {
     ms.addAll(Books.map((b, i) => ({ id: i, title: b.title, authorFirstName: b.author.firstName })));
     for (let index = 0; index < CONSECUTIVE_COUNT; index++) {
       ms.search('hi');
-    }
-  });
-
-  bench('10,000-books', () => {
-    const ms = new MiniSearch({
-      fields: ['title', 'author'],
-      storeFields: ['title', 'author'],
-    });
-    ms.addAll(ManyBooks.map((b, i) => ({ id: i, title: b.title, author: b.author })));
-    for (let index = 0; index < CONSECUTIVE_COUNT; index++) {
-      ms.search('cons con');
     }
   });
 
