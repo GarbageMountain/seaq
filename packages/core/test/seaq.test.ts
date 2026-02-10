@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { seaq } from '../src/index';
+import { seaq, SeaqResult } from '../src/index';
 import Contacts from '@seaq/test-data/contacts-1k.json';
 import ManyContacts from '@seaq/test-data/contacts-10k.json';
 
@@ -12,10 +12,9 @@ describe('small collection', () => {
 
   test('fuzzy search', () => {
     const searchResults = seaq(Contacts, 'Juile', { keys: ['givenName'], fuzziness: 0.5, limit: Infinity, threshold: 0 });
-    // Minimum match ratio filters out items with < 50% chars matched,
-    // so count is lower than the old 769 but still substantial
+    // Quadratic degradation gives near-zero (but non-zero) scores to poor matches,
+    // so with threshold: 0 the count may reach up to the full dataset
     expect(searchResults.length).toBeGreaterThan(0);
-    expect(searchResults.length).toBeLessThan(769);
     expect(searchResults[0]).toMatchObject({ givenName: 'Julie' });
   });
 
@@ -65,10 +64,9 @@ describe('large collection', () => {
 
   test('fuzzy search', () => {
     const searchResults = seaq(ManyContacts as any, 'Natnah', { keys: ['givenName'], fuzziness: 0.5, limit: Infinity, threshold: 0 });
-    // Minimum match ratio filters out items with < 50% chars matched,
-    // so count is lower than the old 8907 but still substantial
+    // Quadratic degradation gives near-zero (but non-zero) scores to poor matches,
+    // so with threshold: 0 the count may reach up to the full dataset
     expect(searchResults.length).toBeGreaterThan(0);
-    expect(searchResults.length).toBeLessThan(8907);
     expect(searchResults[0]).toMatchObject({ givenName: 'Nathan' });
   });
 
@@ -187,13 +185,14 @@ describe('fieldMode option', () => {
     expect(results[0]).toMatchObject({ firstName: 'John', lastName: 'Smith' });
   });
 
-  test('separate mode (default) - only matches within single field', () => {
+  test('separate mode (default) - multi-word matches across fields via token scoring', () => {
     const results = seaq(contacts, 'john smith', {
       keys: ['firstName', 'lastName'],
       fuzziness: 0,
     });
-    // "john smith" won't fully match any single field
-    expect(results).toHaveLength(0);
+    // Token scoring: "john" matches firstName, "smith" matches lastName
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]).toMatchObject({ firstName: 'John', lastName: 'Smith' });
   });
 
   test('separate mode - single word matches', () => {
@@ -426,5 +425,305 @@ describe('default limit', () => {
     });
     expect(filteredResults.length).toBeLessThan(allResults.length);
     expect(filteredResults.length).toBeGreaterThan(0);
+  });
+});
+
+// ─── Real-world search patterns ─────────────────────────────────────
+// Tests from an end-user perspective: what you type → what you expect.
+// All use default options (separate mode, fuzziness 0.2, threshold 0.3)
+// unless noted, since that's what users experience out of the box.
+
+describe('multi-word contact search', () => {
+  const people = [
+    { first: 'John', last: 'Smith' },
+    { first: 'Jane', last: 'Smith' },
+    { first: 'Jane', last: 'Doe' },
+    { first: 'Robert', last: 'Johnson' },
+    { first: 'Bob', last: 'Robertson' },
+  ];
+  const keys = ['first', 'last'];
+
+  // "first last" — the most basic pattern
+  test('"john smith" finds John Smith', () => {
+    const results = seaq(people, 'john smith', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'John', last: 'Smith' }));
+  });
+
+  test('"jane doe" finds Jane Doe', () => {
+    const results = seaq(people, 'jane doe', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'Jane', last: 'Doe' }));
+  });
+
+  test('"robert johnson" finds Robert Johnson', () => {
+    const results = seaq(people, 'robert johnson', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'Robert', last: 'Johnson' }));
+  });
+
+  // partial first + partial last
+  test('"joh smi" finds John Smith', () => {
+    const results = seaq(people, 'joh smi', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'John', last: 'Smith' }));
+  });
+
+  test('"rob joh" finds Robert Johnson', () => {
+    const results = seaq(people, 'rob joh', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'Robert', last: 'Johnson' }));
+  });
+
+  // first name + last initial
+  test('"john s" finds John Smith', () => {
+    const results = seaq(people, 'john s', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'John', last: 'Smith' }));
+  });
+
+  test('"jane d" finds Jane Doe', () => {
+    const results = seaq(people, 'jane d', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'Jane', last: 'Doe' }));
+  });
+
+  // first initial + last name
+  test('"j smith" finds John Smith', () => {
+    const results = seaq(people, 'j smith', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'John', last: 'Smith' }));
+  });
+
+  test('"j doe" finds Jane Doe', () => {
+    const results = seaq(people, 'j doe', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'Jane', last: 'Doe' }));
+  });
+
+  // concatenated abbreviations
+  test('"johsm" finds John Smith', () => {
+    const results = seaq(people, 'johsm', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'John', last: 'Smith' }));
+  });
+
+  test('"robjoh" finds Robert Johnson', () => {
+    const results = seaq(people, 'robjoh', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'Robert', last: 'Johnson' }));
+  });
+
+  // typos in multi-word queries
+  test('"jonh smith" finds John Smith (typo in first name)', () => {
+    const results = seaq(people, 'jonh smith', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'John', last: 'Smith' }));
+  });
+
+  test('"john smtih" finds John Smith (typo in last name)', () => {
+    const results = seaq(people, 'john smtih', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'John', last: 'Smith' }));
+  });
+});
+
+describe('middle name interference', () => {
+  const people = [
+    { first: 'Helen', last: 'Green', middle: 'Henry' },
+    { first: 'Helena', last: 'Greco', middle: '' },
+    { first: 'Henry', last: 'Greenberg', middle: '' },
+  ];
+  const keys = ['first', 'last', 'middle'];
+
+  test('"helen green" finds Helen Green despite middle name', () => {
+    const results = seaq(people, 'helen green', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'Helen', last: 'Green' }));
+  });
+
+  test('"hel gre" finds Helen Green despite middle name', () => {
+    const results = seaq(people, 'hel gre', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'Helen', last: 'Green' }));
+  });
+
+  test('"helgr" finds Helen Green despite middle name', () => {
+    const results = seaq(people, 'helgr', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'Helen', last: 'Green' }));
+  });
+
+  test('"helen g" finds Helen Green', () => {
+    const results = seaq(people, 'helen g', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'Helen', last: 'Green' }));
+  });
+
+  test('"h green" finds Helen Green', () => {
+    const results = seaq(people, 'h green', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'Helen', last: 'Green' }));
+  });
+
+  test('"helen green" ranks Helen Green above Helena Greco', () => {
+    const results = seaq(people, 'helen green', { keys, includeMatches: true }) as SeaqResult<typeof people[0]>[];
+    const helenIdx = results.findIndex((r) => r.item.first === 'Helen' && r.item.last === 'Green');
+    const helenaIdx = results.findIndex((r) => r.item.first === 'Helena');
+    expect(helenIdx).not.toBe(-1);
+    if (helenaIdx !== -1) {
+      expect(helenIdx).toBeLessThan(helenaIdx);
+    }
+  });
+});
+
+describe('real contact data — Helen Henry Green', () => {
+  // Mirrors the example app config: keys, default everything else
+  const keys = ['givenName', 'familyName', 'middleName'];
+
+  function findsHelenGreen(results: any[]) {
+    return results.some((r) => {
+      const item = r.item ?? r;
+      return item.givenName === 'Helen' && item.familyName === 'Green';
+    });
+  }
+
+  test('"helen green"', () => {
+    expect(findsHelenGreen(seaq(Contacts, 'helen green', { keys }))).toBe(true);
+  });
+
+  test('"hel gre"', () => {
+    expect(findsHelenGreen(seaq(Contacts, 'hel gre', { keys }))).toBe(true);
+  });
+
+  test('"helgr"', () => {
+    expect(findsHelenGreen(seaq(Contacts, 'helgr', { keys }))).toBe(true);
+  });
+
+  test('"helen g"', () => {
+    expect(findsHelenGreen(seaq(Contacts, 'helen g', { keys }))).toBe(true);
+  });
+
+  test('"h green"', () => {
+    expect(findsHelenGreen(seaq(Contacts, 'h green', { keys }))).toBe(true);
+  });
+
+  test('"hgreen" (email-style)', () => {
+    expect(findsHelenGreen(seaq(Contacts, 'hgreen', { keys }))).toBe(true);
+  });
+});
+
+describe('city + state search', () => {
+  const places = [
+    { city: 'Portland', state: 'Oregon' },
+    { city: 'Portland', state: 'Maine' },
+    { city: 'Austin', state: 'Texas' },
+    { city: 'Springfield', state: 'Illinois' },
+    { city: 'Springfield', state: 'Missouri' },
+    { city: 'San Francisco', state: 'California' },
+  ];
+  const keys = ['city', 'state'];
+
+  test('"portland oregon" finds Portland, Oregon', () => {
+    const results = seaq(places, 'portland oregon', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ city: 'Portland', state: 'Oregon' }));
+  });
+
+  test('"austin texas" finds Austin, Texas', () => {
+    const results = seaq(places, 'austin texas', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ city: 'Austin', state: 'Texas' }));
+  });
+
+  test('"port ore" finds Portland, Oregon', () => {
+    const results = seaq(places, 'port ore', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ city: 'Portland', state: 'Oregon' }));
+  });
+
+  test('"spring ill" finds Springfield, Illinois', () => {
+    const results = seaq(places, 'spring ill', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ city: 'Springfield', state: 'Illinois' }));
+  });
+
+  test('"san fran" finds San Francisco', () => {
+    const results = seaq(places, 'san fran', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ city: 'San Francisco' }));
+  });
+
+  test('"sf cal" finds San Francisco, California', () => {
+    const results = seaq(places, 'sf cal', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ city: 'San Francisco', state: 'California' }));
+  });
+});
+
+describe('author + title search', () => {
+  const books = [
+    { title: 'The Lord of the Rings', first: 'J.R.R.', last: 'Tolkien' },
+    { title: 'Harry Potter and the Sorcerer Stone', first: 'J.K.', last: 'Rowling' },
+    { title: 'The Great Gatsby', first: 'F. Scott', last: 'Fitzgerald' },
+    { title: 'Pride and Prejudice', first: 'Jane', last: 'Austen' },
+  ];
+  const keys = ['title', 'first', 'last'];
+
+  test('"tolkien rings" finds Lord of the Rings', () => {
+    const results = seaq(books, 'tolkien rings', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ last: 'Tolkien' }));
+  });
+
+  test('"rowling potter" finds Harry Potter', () => {
+    const results = seaq(books, 'rowling potter', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ last: 'Rowling' }));
+  });
+
+  test('"gatsby fitzgerald" finds The Great Gatsby', () => {
+    const results = seaq(books, 'gatsby fitzgerald', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ last: 'Fitzgerald' }));
+  });
+
+  test('"jane austen" finds Pride and Prejudice', () => {
+    const results = seaq(books, 'jane austen', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'Jane', last: 'Austen' }));
+  });
+
+  test('"austen pride" finds Pride and Prejudice', () => {
+    const results = seaq(books, 'austen pride', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ last: 'Austen' }));
+  });
+});
+
+describe('token scoring edge cases', () => {
+  const people = [
+    { first: 'John', last: 'Smith' },
+    { first: 'Jane', last: 'Doe' },
+    { first: 'Helen', last: 'Green' },
+  ];
+  const keys = ['first', 'last'];
+
+  test('double space between tokens still finds result', () => {
+    const results = seaq(people, 'john  smith', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'John', last: 'Smith' }));
+  });
+
+  test('leading/trailing spaces still finds result', () => {
+    const results = seaq(people, ' john smith ', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'John', last: 'Smith' }));
+  });
+
+  test('only spaces returns empty', () => {
+    const results = seaq(people, '   ', { keys });
+    expect(results).toHaveLength(0);
+  });
+
+  test('single-char tokens find results', () => {
+    const results = seaq(people, 'j s', { keys });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'John', last: 'Smith' }));
+  });
+
+  test('more tokens than fields still works', () => {
+    // 3 tokens, 2 keys — should still find Helen Green
+    const results = seaq(people, 'helen henry green', { keys: ['first', 'last'] });
+    expect(results).toContainEqual(expect.objectContaining({ first: 'Helen', last: 'Green' }));
+  });
+
+  test('one token matches nothing — reduced score but still found', () => {
+    // "helen xyz" — "helen" scores high, "xyz" scores 0, average = helen_score / 2
+    const results = seaq(people, 'helen xyz', { keys, limit: Infinity, threshold: 0 });
+    expect(results.some(r => r.first === 'Helen' && r.last === 'Green')).toBe(true);
+  });
+});
+
+describe('regression guards', () => {
+  test('"nath" on 10K with threshold:0 returns fewer than old 9756', () => {
+    // With default threshold (0.3), the practical result count is tiny
+    const withThreshold = seaq(ManyContacts as any, 'nath', {
+      keys: ['givenName'],
+      fuzziness: 0.2,
+      limit: Infinity,
+      threshold: 0.3,
+    });
+    expect(withThreshold.length).toBeLessThan(500);
+    expect(withThreshold.length).toBeGreaterThan(0);
+    expect((withThreshold[0] as any).givenName.toLowerCase()).toContain('nath');
   });
 });

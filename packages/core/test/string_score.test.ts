@@ -145,37 +145,49 @@ describe('string_score', () => {
     });
   });
 
-  describe('minimum match ratio', () => {
-    test('2/6 chars matched returns 0 (below 50%)', () => {
-      // "rocket" vs "check mark" — only 'c' and 'k' can match (2/6 = 33%)
-      expect(string_score('check mark', 'rocket', 0.2)).toBe(0);
+  describe('quadratic miss degradation', () => {
+    test('high miss ratio (67%) produces very low but non-zero score', () => {
+      // "rocket" vs "check mark" — only 'c' and 'k' can match (4/6 = 67% miss)
+      const score = string_score('check mark', 'rocket', 0.2);
+      expect(score).toBeGreaterThan(0);
+      expect(score).toBeLessThan(0.05); // quadratic penalty crushes this
     });
 
-    test('4/6 chars matched returns > 0 (above 50%)', () => {
-      // "rocket" vs "rock" — 'r','o','c','k' all found (4/6 = 67%)
+    test('moderate match (67% hit) returns decent score', () => {
+      // "rocket" vs "rock" — 'r','o','c','k' all found (2/6 = 33% miss)
       expect(string_score('rock', 'rocket', 0.2)).toBeGreaterThan(0);
     });
 
-    test('1/3 chars matched returns 0 (below 50%)', () => {
-      // "btn" vs "test.ts" — only 't' found (1/3 = 33%)
-      expect(string_score('test.ts', 'btn', 0.2)).toBe(0);
+    test('high miss ratio (67%) produces near-zero score', () => {
+      // "btn" vs "test.ts" — only 't' found (2/3 = 67% miss)
+      const score = string_score('test.ts', 'btn', 0.2);
+      expect(score).toBeGreaterThan(0);
+      expect(score).toBeLessThan(0.05);
     });
 
-    test('3/3 chars matched returns > 0 (100%)', () => {
-      // "btn" vs "Button.tsx" — all chars found
+    test('perfect match ratio returns > 0', () => {
+      // "btn" vs "Button.tsx" — all chars found (0% miss)
       expect(string_score('Button.tsx', 'btn', 0.2)).toBeGreaterThan(0);
     });
 
-    test('boundary: exactly 50% missed still scores > 0', () => {
-      // 4-char query with 2 missed = 50% miss rate (not > 50%), should pass
-      // "abcd" vs "axcx" — 'a' found, 'b' missed, 'c' found, 'd' missed → 2/4 = 50% miss
-      expect(string_score('axcx', 'abcd', 0.5)).toBeGreaterThan(0);
+    test('50% miss degrades significantly', () => {
+      // 4-char query with 2 missed = 50% miss → (1-0.5)^2 = 0.25× penalty
+      const score = string_score('axcx', 'abcd', 0.5);
+      expect(score).toBeGreaterThan(0);
+      expect(score).toBeLessThan(0.25); // heavily penalized but non-zero
     });
 
-    test('boundary: just over 50% missed returns 0', () => {
-      // 3-char query with 2 missed = 67% miss rate, should return 0
-      // "xyz" vs "xaa" — 'x' found, 'y' missed, 'z' missed → 2/3 = 67% miss
-      expect(string_score('xaa', 'xyz', 0.5)).toBe(0);
+    test('67% miss degrades heavily', () => {
+      // 3-char query with 2 missed = 67% miss → (1-0.67)^2 ≈ 0.11× penalty
+      const score = string_score('xaa', 'xyz', 0.5);
+      expect(score).toBeGreaterThan(0);
+      expect(score).toBeLessThan(0.2); // very low but not exactly zero
+    });
+
+    test('partial query match returns > 0 for cross-field use', () => {
+      // This is the key regression fix: "helen green" scored against "Helen"
+      // should return > 0 so token-aware scoring can combine field scores
+      expect(string_score('Helen', 'helen green', 0.2)).toBeGreaterThan(0);
     });
   });
 

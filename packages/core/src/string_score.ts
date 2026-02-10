@@ -60,7 +60,6 @@ export function string_score(
   if (fuzziness) {
     let prevFound = true;
     let misses = 0;
-    const maxMisses = Math.floor(wordLength * 0.5);
     for (i = 0; i < wordLength; i += 1) {
       // Find next first case-insensitive match of a character.
       idxOf = lString.indexOf(lWord.charAt(i), startAt);
@@ -68,9 +67,7 @@ export function string_score(
       if (idxOf === -1) {
         fuzzies += fuzzyFactor;
         prevFound = false;
-        // Early bail: if we've already exceeded the 50% miss threshold,
-        // no point continuing — the post-loop check would reject anyway.
-        if (++misses > maxMisses) return 0;
+        misses++;
       } else {
         if (positions) positions.push(idxOf);
         if (startAt === idxOf && prevFound) {
@@ -100,8 +97,10 @@ export function string_score(
       }
     }
 
-    // Note: minimum match ratio (>50% miss → return 0) is enforced by the
-    // early bail inside the loop above, so no post-loop check needed.
+    // Quadratic degradation: penalizes high miss ratios heavily
+    // 0% miss → 1.0×, 50% miss → 0.25×, 75% miss → 0.0625×
+    const missRatio = misses / wordLength;
+    runningScore *= (1 - missRatio) * (1 - missRatio);
   } else {
     for (i = 0; i < wordLength; i += 1) {
       // Find next first case-insensitive match of a character.

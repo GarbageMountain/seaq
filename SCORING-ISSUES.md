@@ -1,5 +1,23 @@
 # Scoring & Fuzziness Issues — Living Document
 
+## Timeline (2026-02-09)
+
+How each fix led to the next problem:
+
+1. **New defaults** (`fuzziness: 0.2`, `fieldMode: 'separate'`) — separate mode was 59% faster, fuzziness gave typo tolerance out of the box.
+2. **Garbage flood** — fuzziness meant "nath" on 10K contacts returned 9,756 results. Every item gets a non-zero score when even 1 char matches.
+3. **Threshold + limit** — added `threshold: 0.3` (relative cutoff) and `limit: 10`. Chose relative over absolute because absolute minScore breaks short queries on long strings. This was the "seaq is a type-ahead library" decision.
+4. **Consecutive bonus bug** — exposed by investigating scores. Fuzzy-skipped chars left `startAt` unchanged, granting false 0.7 consecutive bonus to the next found char. Fixed with `prevFound` flag.
+5. **Match ratio + formula rebalance** — added >50% miss → return 0 (kills worst garbage). Rebalanced formula from 50/50 to 30/70 (target coverage / query satisfaction) to reduce short-string bias.
+6. **Early bail optimization** — moved the 50% miss check into the loop for ~22% speedup. Pure perf, no behavior change.
+7. **Cross-field regression** — the early bail broke multi-word queries in separate mode. "helen green" (11 chars) vs "Helen" (5 chars) → 6 misses > maxMisses(5) → hard zero. No single field can match a query whose chars mostly belong to another field. 11 failing tests.
+8. **Quadratic degradation + token scoring** — replaced hard-zero with `(1-missRatio)²` curve so partials return near-zero instead of zero. Added token-aware scoring: split query on spaces, score each token against each field, average best-field scores. `max(fullQuery, tokenAverage)` preserves single-word and concatenated-abbreviation behavior.
+9. **Performance regression** — token scoring is ~2.75x slower on multi-word queries (mechanical cost of `tokens × fields` extra `string_score` calls per item). Single-word queries unaffected. Quality is correct, perf needs work.
+
+Each layer solved a real problem but surfaced the next one. The key tension: **separate mode's speed advantage comes from not looking across fields, but users expect multi-word queries to work across fields.**
+
+---
+
 ## The Problem
 
 With the new defaults (`fuzziness: 0.2`, `fieldMode: 'separate'`), seaq returns way too many results. The fuzziness causes almost everything to match with a non-zero score, and seaq returns anything with `score > 0`.
@@ -586,3 +604,183 @@ The research reveals **five gaps** between seaq and the tools users consider "go
 - [QuickScore](https://github.com/fwextensions/quick-score) — Quicksilver port with optimal match finding
 - [string_score (joshaven)](https://github.com/joshaven/string_score) — original algorithm seaq is based on
 - [objc.io: A Fast Fuzzy Search](https://www.objc.io/blog/2020/08/18/fuzzy-search/) — Smith-Waterman adapted for file search
+
+---
+
+## Cross-Field Multi-Word Search Regression (2026-02-09)
+
+### The Problem
+
+After the minimum-match-ratio change (>50% miss → return 0), multi-word queries in separate mode are broken. **11 failing tests** across contact search, city+state search, and author+title search.
+
+Example: searching `"helen green"` with `keys: ['givenName', 'familyName', 'middleName']` returns nothing for `{ givenName: "Helen", familyName: "Green", middleName: "Henry" }`.
+
+### Why It Breaks
+
+Two interacting issues:
+
+1. **`string_score` hard-zeros on >50% miss**: `"helen green"` (11 chars) vs `"Helen"` (5 chars) → h,e,l,e,n match but space,g,r,e,e,n miss → 6 misses > maxMisses(5) → instant 0.
+
+2. **Separate mode scores entire query against individual fields**: No awareness that `"helen green"` is two concepts spanning two fields. Each field gets the full 11-char query and fails.
+
+### Failing Scenarios
+
+| Query | Dataset | Pattern |
+|---|---|---|
+| `"john smith"` | contacts | first + last name (10 chars vs 4-char field) |
+| `"robert johnson"` | contacts | first + last name (14 chars vs 6-char field) |
+| `"joh smi"` | contacts | partial + partial |
+| `"rob joh"` | contacts | partial + partial |
+| `"jonh smith"` | contacts | typo + cross-field |
+| `"john smtih"` | contacts | cross-field + typo |
+| `"helen green"` | contacts (inline + real data) | first + last with middle name interference |
+| `"helen green"` ranking | contacts | can't rank what scores 0 |
+| `"portland oregon"` | cities | city + state |
+| `"gatsby fitzgerald"` | books | title + author (18 chars) |
+| `"jane austen"` | books | author name — finds J.K. Rowling instead |
+
+### Passing Scenarios (interesting)
+
+| Query | Why It Survives |
+|---|---|
+| `"jane doe"` | 8 chars vs "Jane"(4) → 4 misses = maxMisses(4), just barely under |
+| `"john s"`, `"jane d"` | Short enough that miss budget isn't exceeded on first-name field |
+| `"j smith"`, `"j doe"` | Query matched mostly within the last-name field |
+| `"johsm"`, `"robjoh"` | 5-6 chars, no space, stays within miss budget |
+| `"helgr"` | 5 chars vs "Helen"(5) → only 2 misses, within budget |
+| `"san fran"` | Single-field match (city already has a space) |
+| All city+state tests | Short queries relative to field lengths |
+
+### Fix: Two-Part Approach
+
+#### Part 1: Replace hard-zero with steep degradation in `string_score`
+
+**File**: `packages/core/src/string_score.ts`
+
+Remove the early-bail `return 0` on miss threshold. Let all query characters attempt matching, apply a post-loop penalty based on miss ratio.
+
+**Before:**
+```typescript
+let misses = 0;
+const maxMisses = Math.floor(wordLength * 0.5);
+// in loop:
+if (++misses > maxMisses) return 0;
+```
+
+**After (conceptual):**
+```typescript
+// Remove maxMisses early bail entirely
+// After the loop, apply a miss-ratio penalty:
+const missRatio = misses / wordLength;
+finalScore *= Math.pow(1 - missRatio, 2);  // quadratic degradation
+```
+
+**Why this doesn't re-introduce the "nath → 9756 results" problem:**
+- Threshold (0.3 default) filters results below 30% of the best score
+- Quadratic penalty crushes high-miss-ratio scores (55% miss → 0.20× multiplier, 75% miss → 0.06×)
+- Limit (10 default) caps output
+- The original fix was really the combination of threshold + limit; the hard-zero was belt-and-suspenders
+
+**Perf impact**: Same call count. ~2-5% more work per call (fewer early bails means more loop iterations on bad matches). Negligible.
+
+#### Part 2: Token-aware scoring in separate mode
+
+**File**: `packages/core/src/Seaq.ts`, inside `scoreItems`
+
+When the query contains spaces and we're in separate mode, additionally split the query into tokens and score each token against each field. Take the best-field score per token, average across tokens. Use the max of (full-query score, token score) as the item's final score.
+
+```typescript
+// In the separate mode branch of scoreItems:
+const tokens = query.includes(' ') ? query.split(/\s+/).filter(Boolean) : null;
+
+for (const item of list) {
+  // Path A: Score full query against each field (existing behavior)
+  // Handles: single-word queries, concatenated abbreviations ("helgr"),
+  //          fields with natural spaces ("San Francisco")
+  let bestFullScore = 0;
+  for (const key of keys) {
+    for (const value of getProperty(item, key)) {
+      const s = string_score(value, query, fuzziness, lowerQuery);
+      bestFullScore = Math.max(bestFullScore, s);
+    }
+  }
+
+  // Path B: If multi-word, score tokens against fields
+  // Handles: "helen green", "hel gre", "helen g", "h green",
+  //          "portland oregon", "tolkien rings"
+  let tokenScore = 0;
+  if (tokens && tokens.length > 1) {
+    let total = 0;
+    for (const token of tokens) {
+      let bestForToken = 0;
+      for (const key of keys) {
+        for (const value of getProperty(item, key)) {
+          const s = string_score(value, token, fuzziness, lowerToken);
+          bestForToken = Math.max(bestForToken, s);
+        }
+      }
+      total += bestForToken;
+    }
+    tokenScore = total / tokens.length;
+  }
+
+  score = Math.max(bestFullScore, tokenScore);
+}
+```
+
+**Why both paths**: Path A handles single-word + concatenated queries at current speed. Path B handles multi-word cross-field queries. Max of both ensures no regression either way.
+
+**Perf impact**:
+- Single-word queries: **zero overhead** (no spaces → tokens is null, Path B skipped)
+- Multi-word queries: T×K extra string_score calls per item (T=tokens, K=keys)
+  - `"helen green"` (2 tokens, 3 keys): 6 extra calls/item → ~2× total calls
+  - 10K items: ~2.6ms instead of ~1.3ms (still 10× faster than Fuse.js at 26ms)
+  - 1K items or fewer: sub-millisecond regardless
+
+### Implementation Order
+
+1. Part 1: Modify `string_score` — remove hard-zero, add degradation curve
+2. Run tests — verify no regressions in existing 66 passing tests
+3. Part 2: Add token-aware scoring to `scoreItems` separate mode
+4. Run tests — verify all 11 new failing tests now pass
+5. Run benchmarks — verify perf is within acceptable range
+6. Update `includeMatches` metadata to work with token path
+
+### Implementation Status: DONE (2026-02-09)
+
+Both parts implemented and tested. All 272 tests pass.
+
+**Part 1 — `string_score.ts`:** Removed `maxMisses` early bail, replaced with post-loop quadratic degradation: `runningScore *= (1 - missRatio)²`. Miss ratios produce these multipliers: 0% → 1.0×, 50% → 0.25×, 75% → 0.0625×. Partial matches now return tiny but non-zero scores instead of hard zero.
+
+**Part 2 — `Seaq.ts` `scoreItems`:** Token-aware scoring when `fieldMode === 'separate'` and query contains spaces. Pre-splits tokens once (`query.split(/\s+/).filter(Boolean)`), pre-lowercases them, caches `getProperty` results per item. Two scoring paths per item: Path A (full query vs each field, existing behavior) + Path B (per-token best-field, averaged). Final score = `max(A, B)`. `includeMatches` returns per-token `SeaqMatch` entries when Path B wins (one match per token, showing best field for that token).
+
+**Tests updated:**
+- `string_score.test.ts`: "minimum match ratio" suite → "quadratic miss degradation" suite (near-zero assertions instead of hard-zero)
+- `seaq.test.ts`: Updated "separate mode only matches single field" → now expects cross-field match. Relaxed fuzzy search count assertions (quadratic degradation produces more non-zero scores). Added 7 edge cases (double spaces, leading/trailing spaces, only-spaces, single-char tokens, more-tokens-than-fields, one-token-misses). Added regression guard ("nath" 10K with threshold 0.3 stays under 500 results).
+
+### Resolved Questions
+
+- **Token averaging**: Unweighted average. Simpler, and the score of each token naturally reflects its quality — a 1-char token like "j" will score lower than "john", which achieves the weighting effect implicitly.
+- **Degradation curve**: Quadratic `(1-r)²`. Cubic was too aggressive in testing — killed legitimate partial matches. Quadratic plus the existing fuzzies divisor provides sufficient suppression.
+- **`includeMatches` with tokens**: Per-token highlights. When Path B wins, one `SeaqMatch` per token showing the best-field match for that token (e.g., "helen" highlighted in givenName, "green" highlighted in familyName).
+
+### Performance Regression: ~2.75× on Multi-Word Queries
+
+Benchmarks on 10K contacts, 2 keys, `fuzziness: 0`:
+
+| Benchmark | Before | After | Change |
+|-----------|--------|-------|--------|
+| `"nath fe"` separate mode | 774 ops/s | 281 ops/s | **-64% (2.75× slower)** |
+| `"natasha okeefe"` separate | 264 ops/s | 104 ops/s | **-61%** |
+| `"nath fe"` joined mode | 557 ops/s | 523 ops/s | -6% (noise) |
+| `"na"` (single word) | 505 ops/s | 486 ops/s | -4% (noise) |
+
+**Root cause**: Mechanical cost of Path B. For `"nath fe"` with 2 keys, Path B does 2 tokens × 2 fields = 4 extra `string_score` calls per item, on top of Path A's 2 calls. That's 3× the scoring work per item → ~2.75× measured slowdown.
+
+**Impact assessment**: Single-word queries (the common case in type-ahead) are unaffected. Multi-word queries on 10K items take ~3.6ms (separate) vs ~1.3ms (before) — still well under perceptible lag. Joined mode is unaffected (no token path). The hit scales as `O(tokens × fields)` additional `string_score` calls per item.
+
+**Mitigation ideas to explore** (not yet implemented):
+- Skip Path B for items where Path A already scored high (cheap pre-filter)
+- Use a cheaper function than full `string_score` for token scoring (e.g., substring check or prefix match)
+- Run Path B only on the top-N candidates from Path A instead of every item
+- Fuse Paths A and B into a single pass that reuses character matching work

@@ -263,6 +263,12 @@ function scoreItems<T>(
   // Pre-lowercase query once instead of per-item
   const lowerQuery = query.toLowerCase();
 
+  // Token splitting for separate mode multi-word queries
+  const tokens = (fieldMode === 'separate' && keys && query.includes(' '))
+    ? query.split(/\s+/).filter(Boolean)
+    : null;
+  const lowerTokens = tokens?.map(t => t.toLowerCase());
+
   const result: Array<MetaDataItem<T>> = [];
   let maxScore = 0;
 
@@ -272,24 +278,64 @@ function scoreItems<T>(
 
     if (keys) {
       if (fieldMode === 'separate') {
-        // Score each key's values separately, take the best score
+        // Cache field values once per item to avoid redundant getProperty calls
+        const fieldValues: { key: string; values: string[] }[] = keys.map(key => ({
+          key,
+          values: getProperty(item, key),
+        }));
+
+        // Path A: score full query against each field, take best
         let bestScore = 0;
         let bestMatch: SeaqMatch | undefined;
-        for (const key of keys) {
-          const values = getProperty(item, key);
-          for (const value of values) {
+        for (const field of fieldValues) {
+          for (const value of field.values) {
             const positions: number[] | undefined = includeMatches ? [] : undefined;
             const s = string_score(value, query, fuzziness, lowerQuery, positions);
             if (s > bestScore) {
               bestScore = s;
               if (includeMatches) {
-                bestMatch = { key, value, indices: positionsToRanges(positions!), score: s };
+                bestMatch = { key: field.key, value, indices: positionsToRanges(positions!), score: s };
               }
             }
           }
         }
+
+        // Path B: per-token best-field scoring (only for multi-word queries)
+        if (tokens && lowerTokens) {
+          let tokenScoreSum = 0;
+          let tokenMatches: SeaqMatch[] | undefined = includeMatches ? [] : undefined;
+          for (let t = 0; t < tokens.length; t++) {
+            let bestTokenScore = 0;
+            let bestTokenMatch: SeaqMatch | undefined;
+            for (const field of fieldValues) {
+              for (const value of field.values) {
+                const positions: number[] | undefined = includeMatches ? [] : undefined;
+                const s = string_score(value, tokens[t], fuzziness, lowerTokens[t], positions);
+                if (s > bestTokenScore) {
+                  bestTokenScore = s;
+                  if (includeMatches) {
+                    bestTokenMatch = { key: field.key, value, indices: positionsToRanges(positions!), score: s };
+                  }
+                }
+              }
+            }
+            tokenScoreSum += bestTokenScore;
+            if (includeMatches && bestTokenMatch) {
+              tokenMatches!.push(bestTokenMatch);
+            }
+          }
+          const tokenAvg = tokenScoreSum / tokens.length;
+          if (tokenAvg > bestScore) {
+            bestScore = tokenAvg;
+            if (includeMatches) {
+              bestMatch = undefined; // clear Path A match
+              matches = tokenMatches;
+            }
+          }
+        }
+
         score = bestScore;
-        if (includeMatches && bestMatch) {
+        if (includeMatches && !matches && bestMatch) {
           matches = [bestMatch];
         }
       } else {
