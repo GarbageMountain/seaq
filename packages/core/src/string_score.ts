@@ -94,6 +94,12 @@ export function string_score(
         prevFound = true;
       }
     }
+
+    // Minimum match ratio: if more than 50% of query chars were missed, return 0.
+    // fuzzies starts at 1 and accumulates fuzzyFactor per missed char,
+    // so (fuzzies - 1) / fuzzyFactor gives the exact miss count.
+    const missedChars = (fuzzies - 1) / fuzzyFactor;
+    if (missedChars / wordLength > 0.5) return 0;
   } else {
     for (i = 0; i < wordLength; i += 1) {
       // Find next first case-insensitive match of a character.
@@ -131,7 +137,7 @@ export function string_score(
   }
 
   // Reduce penalty for longer strings.
-  finalScore = (0.5 * (runningScore / strLength + runningScore / wordLength)) / fuzzies;
+  finalScore = (0.3 * (runningScore / strLength) + 0.7 * (runningScore / wordLength)) / fuzzies;
 
   if (lWord[0] === lString[0] && finalScore < 0.85) {
     finalScore += 0.15;

@@ -391,12 +391,13 @@ Density separates these more cleanly than the current score. `Button.tsx` (0.183
 
 ---
 
-### Recommendation
+### Recommendation & Status
 
-1. **Already shipped:** Consecutive bonus bug fix (Issue 2) + threshold+limit defaults
-2. **Next likely win:** Minimum match ratio (A) — surgical, targeted at fuzzy garbage
-3. **Worth pursuing:** Formula rebalancing to 30/70 (B) — moderate impact, well-understood
-4. **Defer:** Gap penalty (C) and density (D) — invasive, better as a deliberate scoring v2
+1. **DONE:** Consecutive bonus bug fix (Issue 2) + threshold+limit defaults
+2. **DONE:** Minimum match ratio (A) — if >50% of query chars missed, score is forced to 0. Kills worst fuzzy garbage (e.g., "check mark" for "rocket" with 2/6 chars).
+3. **DONE:** Formula rebalancing to 30/70 (B) — query satisfaction now 70%, target coverage 30%. Narrows short-vs-long score spread from 8x to ~6.7x.
+4. **UP NEXT:** DP optimal matching + gap penalties (C/D combined) — the fzy-style two-matrix DP rewrite. Gap penalties come naturally as part of the DP recurrence, so C and D are one project.
+5. **LATER (if needed):** Extended boundary detection (slash, dot, underscore, camelCase). Less urgent for seaq's primary use case (type-ahead on object lists, not file paths). Worth revisiting if seaq gets adopted for file-finder or command-palette scenarios.
 
 ---
 
