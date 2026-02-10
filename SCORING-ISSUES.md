@@ -401,6 +401,34 @@ Density separates these more cleanly than the current score. `Button.tsx` (0.183
 
 ---
 
+## Performance Note: Query-Length Scaling Inversion (2026-02-09)
+
+The threshold+limit defaults (step 1) shifted the performance bottleneck from post-processing to per-item scoring, inverting the query-length performance curve.
+
+**Before (no limit, no threshold) — from BENCHMARKS.md snapshot:**
+
+| Query | ops/s | Bottleneck |
+|---|---|---|
+| Short "na" | 432 | Sorting 9000+ results |
+| Medium "nath fe" | 546 | Less results to sort |
+| Long "natasha okeefe" | 532 | Even fewer results |
+
+Short queries were *slowest* because they matched nearly everything, producing huge arrays that needed O(n log n) sorting.
+
+**After (limit: 10, threshold: 0.3, match ratio, 30/70 formula):**
+
+| Query | ops/s | Bottleneck |
+|---|---|---|
+| Short "na" | 505 | `string_score` loop (2 `indexOf`/call) |
+| Medium "nath fe" | 372 | `string_score` loop (7 `indexOf`/call) |
+| Long "natasha okeefe" | 264 | `string_score` loop (14 `indexOf`/call) |
+
+With limit 10 + heap, post-processing is O(n log 10) ≈ O(n) regardless of match count. Now the dominant cost is the `string_score` inner loop, which runs `wordLength` iterations × 20K calls (10K items × 2 fields). Short queries got ~17% faster, long queries got ~50% slower.
+
+**Net assessment:** Short queries (the common case in type-ahead) got faster. Long queries regressed but are still well under the 4ms threshold for perceptible lag on 10K items. Not actionable as a bug, but worth considering pre-filter or early-bail optimizations to recover some of the long-query performance.
+
+---
+
 ## Industry Research: How Other Tools Score (2026-02-09)
 
 ### The landscape
