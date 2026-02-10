@@ -6,7 +6,14 @@
       "Bash(npm view:*)",
       "Bash(yarn vitest:*)",
       "Bash(yarn workspace seaq vitest run:*)",
-      "Bash(yarn workspace seaq vitest bench:*)"
+      "Bash(yarn workspace seaq vitest bench:*)",
+      "Bash(git log:*)",
+      "Bash(yarn ts-check:*)",
+      "Bash(yarn test:*)",
+      "Bash(npx vite:*)",
+      "WebSearch",
+      "WebFetch(domain:www.fusejs.io)",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []
