@@ -8,6 +8,7 @@ import type { SeaqConfig, FuseConfig, MiniSearchConfig, UFuzzyConfig, LunrConfig
 
 export interface SearchResult {
   results: string[];
+  items: unknown[];
   timeMs: number;
   resultCount: number;
 }
@@ -33,10 +34,13 @@ export function searchSeaq(dataset: DatasetConfig, query: string, config: SeaqCo
       ...(keys.length > 0 ? { keys } : {}),
       ...(config.fuzziness != null ? { fuzziness: config.fuzziness } : {}),
       fieldMode: config.fieldMode,
+      ...(config.limit != null ? { limit: config.limit } : {}),
     });
   });
+  const top = result.slice(0, 10);
   return {
-    results: result.slice(0, 10).map(dataset.displayFn),
+    results: top.map(dataset.displayFn),
+    items: top,
     timeMs,
     resultCount: result.length,
   };
@@ -44,18 +48,27 @@ export function searchSeaq(dataset: DatasetConfig, query: string, config: SeaqCo
 
 // ── Fuse.js ──
 
-let fuseCache: { data: unknown[]; keys: string[]; index: Fuse<unknown> } | null = null;
+let fuseCache: { data: unknown[]; keys: string[]; configKey: string; index: Fuse<unknown> } | null = null;
+
+function fuseConfigKey(keys: string[], config: FuseConfig): string {
+  return JSON.stringify({ keys, threshold: config.threshold, distance: config.distance, ignoreLocation: config.ignoreLocation, minMatchCharLength: config.minMatchCharLength, isCaseSensitive: config.isCaseSensitive });
+}
 
 export function searchFuse(dataset: DatasetConfig, query: string, config: FuseConfig): SearchResult {
   const keys = dataset.keys;
+  const ck = fuseConfigKey(keys, config);
 
   const { result, timeMs } = timed(() => {
     let fuse: Fuse<unknown>;
-    if (config.preIndexed && fuseCache?.data === dataset.data && arraysEqual(fuseCache.keys, keys)) {
+    if (config.preIndexed && fuseCache?.data === dataset.data && fuseCache.configKey === ck) {
       fuse = fuseCache.index;
     } else {
       const opts: ConstructorParameters<typeof Fuse>[1] = {
         threshold: config.threshold,
+        distance: config.distance,
+        ignoreLocation: config.ignoreLocation,
+        minMatchCharLength: config.minMatchCharLength,
+        isCaseSensitive: config.isCaseSensitive,
         includeScore: true,
       };
       if (!isStringArray(dataset.data)) {
@@ -63,14 +76,16 @@ export function searchFuse(dataset: DatasetConfig, query: string, config: FuseCo
       }
       fuse = new Fuse(dataset.data, opts);
       if (config.preIndexed) {
-        fuseCache = { data: dataset.data, keys, index: fuse };
+        fuseCache = { data: dataset.data, keys, configKey: ck, index: fuse };
       }
     }
     return fuse.search(query);
   });
 
+  const top = result.slice(0, 10);
   return {
-    results: result.slice(0, 10).map((r) => dataset.displayFn(r.item)),
+    results: top.map((r) => dataset.displayFn(r.item)),
+    items: top.map((r) => r.item),
     timeMs,
     resultCount: result.length,
   };
@@ -130,17 +145,20 @@ export function searchMiniSearch(dataset: DatasetConfig, query: string, config: 
         miniCache = { data: dataset.data, keys, index: ms };
       }
     }
-    return ms.search(query, { prefix: config.prefix, fuzzy: config.fuzzy });
+    return ms.search(query, {
+      prefix: config.prefix,
+      fuzzy: config.fuzzy,
+      combineWith: config.combineWith,
+      weights: { fuzzy: config.fuzzyWeight, prefix: config.prefixWeight },
+    });
   });
 
-  const idSet = new Set(result.slice(0, 10).map((r) => r.id as number));
-  const display = dataset.data
-    .filter((_, i) => idSet.has(i))
-    .slice(0, 10)
-    .map(dataset.displayFn);
+  const topIds = result.slice(0, 10).map((r) => r.id as number);
+  const topItems = topIds.map((id) => dataset.data[id]!);
 
   return {
-    results: display,
+    results: topItems.map(dataset.displayFn),
+    items: topItems,
     timeMs,
     resultCount: result.length,
   };
@@ -152,7 +170,7 @@ export function clearMiniSearchCache() {
 
 // ── uFuzzy ──
 
-export function searchUFuzzy(dataset: DatasetConfig, query: string, _config: UFuzzyConfig): SearchResult {
+export function searchUFuzzy(dataset: DatasetConfig, query: string, config: UFuzzyConfig): SearchResult {
   const { result, timeMs } = timed(() => {
     let haystack: string[];
     if (isStringArray(dataset.data)) {
@@ -175,23 +193,30 @@ export function searchUFuzzy(dataset: DatasetConfig, query: string, _config: UFu
       });
     }
 
-    const uf = new uFuzzy({ intraMode: _config.intraMode });
+    const uf = new uFuzzy({
+      intraMode: config.intraMode,
+      ...(config.intraMode === 1
+        ? {
+            intraSub: config.intraSub,
+            intraTrn: config.intraTrn,
+            intraDel: config.intraDel,
+          }
+        : {}),
+    });
     const [idxs, info, order] = uf.search(haystack, query);
     if (!idxs) return [];
     if (!info || !order) {
-      // No ranking info — idxs is the list of matching indices
       return Array.from(idxs);
     }
-    // order[i] indexes into info arrays; info.idx[i] is the haystack index
     return order.map((oi) => info.idx[oi]!);
   });
 
   const indices = result as number[];
+  const validIndices = indices.slice(0, 10).filter((idx) => idx != null && idx < dataset.data.length);
+  const topItems = validIndices.map((idx) => dataset.data[idx]!);
   return {
-    results: indices
-      .slice(0, 10)
-      .filter((idx) => idx != null && idx < dataset.data.length)
-      .map((idx) => dataset.displayFn(dataset.data[idx]!)),
+    results: topItems.map(dataset.displayFn),
+    items: topItems,
     timeMs,
     resultCount: indices.length,
   };
@@ -235,25 +260,33 @@ export function searchLunr(dataset: DatasetConfig, query: string, config: LunrCo
       }
     }
 
+    // Build the lunr query string with optional wildcards and edit distance
+    let lunrQuery = query;
+    if (config.wildcard) {
+      lunrQuery = query
+        .split(/\s+/)
+        .map((term) => `*${term}*`)
+        .join(' ');
+    } else if (config.editDistance > 0) {
+      lunrQuery = query
+        .split(/\s+/)
+        .map((term) => `${term}~${config.editDistance}`)
+        .join(' ');
+    }
+
     try {
-      return idx.search(query);
+      return idx.search(lunrQuery);
     } catch {
-      try {
-        return idx.search(`*${query}*`);
-      } catch {
-        return [];
-      }
+      return [];
     }
   });
 
-  const idSet = new Set(result.slice(0, 10).map((r) => Number(r.ref)));
-  const display = dataset.data
-    .filter((_, i) => idSet.has(i))
-    .slice(0, 10)
-    .map(dataset.displayFn);
+  const topIds = result.slice(0, 10).map((r) => Number(r.ref));
+  const topItems = topIds.map((id) => dataset.data[id]!);
 
   return {
-    results: display,
+    results: topItems.map(dataset.displayFn),
+    items: topItems,
     timeMs,
     resultCount: result.length,
   };

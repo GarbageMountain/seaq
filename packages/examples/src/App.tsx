@@ -17,28 +17,60 @@ import { ResultsColumn } from './components/ResultsColumn';
 
 export type EngineKey = 'seaq' | 'fuse' | 'minisearch' | 'ufuzzy' | 'lunr';
 
+/** Walk a sample item and return all dot-paths that lead to a string value. */
+function discoverStringPaths(item: unknown, prefix = ''): string[] {
+  if (item == null || typeof item !== 'object') return [];
+  // If it's an array, walk the first element with the same prefix
+  if (Array.isArray(item)) {
+    return item.length > 0 ? discoverStringPaths(item[0], prefix) : [];
+  }
+  const paths: string[] = [];
+  for (const [key, val] of Object.entries(item as Record<string, unknown>)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (typeof val === 'string') {
+      paths.push(path);
+    } else if (typeof val === 'object' && val != null) {
+      paths.push(...discoverStringPaths(val, path));
+    }
+  }
+  return paths;
+}
+
 export interface SeaqConfig {
   fuzziness: number | undefined;
   fieldMode: 'joined' | 'separate';
+  limit: number | undefined;
 }
 
 export interface FuseConfig {
   threshold: number;
+  distance: number;
+  ignoreLocation: boolean;
+  minMatchCharLength: number;
+  isCaseSensitive: boolean;
   preIndexed: boolean;
 }
 
 export interface MiniSearchConfig {
   fuzzy: number;
   prefix: boolean;
+  combineWith: 'OR' | 'AND';
+  fuzzyWeight: number;
+  prefixWeight: number;
   preIndexed: boolean;
 }
 
 export interface UFuzzyConfig {
   intraMode: 0 | 1;
+  intraSub: 0 | 1;
+  intraTrn: 0 | 1;
+  intraDel: 0 | 1;
 }
 
 export interface LunrConfig {
   preIndexed: boolean;
+  wildcard: boolean;
+  editDistance: number;
 }
 
 export interface EngineConfigs {
@@ -49,12 +81,12 @@ export interface EngineConfigs {
   lunr: LunrConfig;
 }
 
-const defaultConfigs: EngineConfigs = {
-  seaq: { fuzziness: undefined, fieldMode: 'joined' },
-  fuse: { threshold: 0.4, preIndexed: false },
-  minisearch: { fuzzy: 0.2, prefix: true, preIndexed: false },
-  ufuzzy: { intraMode: 0 },
-  lunr: { preIndexed: false },
+export const defaultConfigs: EngineConfigs = {
+  seaq: { fuzziness: undefined, fieldMode: 'joined', limit: undefined },
+  fuse: { threshold: 0.4, distance: 100, ignoreLocation: false, minMatchCharLength: 2, isCaseSensitive: false, preIndexed: true },
+  minisearch: { fuzzy: 0.2, prefix: true, combineWith: 'OR', fuzzyWeight: 1, prefixWeight: 0.8, preIndexed: true },
+  ufuzzy: { intraMode: 1, intraSub: 1, intraTrn: 1, intraDel: 1 },
+  lunr: { preIndexed: true, wildcard: false, editDistance: 1 },
 };
 
 const engineNames: Record<EngineKey, string> = {
@@ -71,14 +103,22 @@ export function App() {
   const [query, setQuery] = useState('');
   const [dataset, setDataset] = useState<DatasetKey>('contacts');
   const [configs, setConfigs] = useState<EngineConfigs>(defaultConfigs);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
 
-  const ds = useMemo(() => datasets[dataset], [dataset]);
+  const rawDs = useMemo(() => datasets[dataset], [dataset]);
+  const allPaths = useMemo(
+    () => (rawDs.data.length > 0 && typeof rawDs.data[0] === 'object' ? discoverStringPaths(rawDs.data[0]) : []),
+    [rawDs],
+  );
+  const effectiveKeys = selectedKeys.length > 0 ? selectedKeys : rawDs.keys;
+  const ds = useMemo(() => ({ ...rawDs, keys: effectiveKeys }), [rawDs, effectiveKeys]);
 
-  // Clear caches when dataset changes
+  // Clear caches and key selection when dataset changes
   useEffect(() => {
     clearFuseCache();
     clearMiniSearchCache();
     clearLunrCache();
+    setSelectedKeys([]);
   }, [dataset]);
 
   const updateConfig = useCallback(<K extends EngineKey>(engine: K, patch: Partial<EngineConfigs[K]>) => {
@@ -116,6 +156,33 @@ export function App() {
       <div className="mb-6 space-y-4">
         <SearchInput value={query} onChange={setQuery} />
         <DatasetPicker selected={dataset} onChange={setDataset} />
+        {allPaths.length > 0 && (
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs font-medium text-gray-700 dark:text-gray-200">Search fields:</span>
+            {allPaths.map((k) => (
+              <label key={k} className="flex items-center gap-1 text-xs text-gray-800 dark:text-gray-200">
+                <input
+                  type="checkbox"
+                  className="rounded border-gray-300 dark:border-gray-600"
+                  checked={effectiveKeys.includes(k)}
+                  onChange={(e) => {
+                    const current = selectedKeys.length > 0 ? selectedKeys : [...rawDs.keys];
+                    const next = e.target.checked
+                      ? [...current, k].filter((v, i, a) => a.indexOf(v) === i)
+                      : current.filter((v) => v !== k);
+                    setSelectedKeys(next);
+                  }}
+                />
+                <span>
+                  {k}
+                  {rawDs.keys.includes(k) && (
+                    <span className="ml-0.5 text-[10px] text-gray-500 dark:text-gray-400">(default)</span>
+                  )}
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
         <details className="rounded-md border border-gray-200 bg-gray-900 dark:border-gray-700">
           <summary className="cursor-pointer select-none px-4 py-2 text-xs text-gray-400 hover:text-gray-300">
             <span className="font-medium">Sample entry</span>
