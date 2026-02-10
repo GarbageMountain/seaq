@@ -44,7 +44,7 @@ function seaqSnippet(query: string, keys: string[], config: SeaqConfig): string 
   const opts: string[] = [];
   if (keys.length > 0) opts.push(`keys: [${keys.map(q).join(', ')}]`);
   if (config.fuzziness !== 0.2) opts.push(`fuzziness: ${config.fuzziness}`);
-  if (config.fieldMode !== 'separate') opts.push(`fieldMode: '${config.fieldMode}'`);
+  if (config.fieldMode !== 'joined') opts.push(`fieldMode: '${config.fieldMode}'`);
   if (config.limit != null && config.limit !== 10) opts.push(`limit: ${config.limit}`);
   if (config.threshold !== 0.3) opts.push(`threshold: ${config.threshold}`);
   const optsStr = opts.length > 0 ? `, {\n  ${opts.join(',\n  ')}\n}` : '';
@@ -251,11 +251,11 @@ function SeaqControls({ config, onChange }: { config: SeaqConfig; onChange: (p: 
       />
       <Select
         label="Field mode"
-        hint='Separate = best single field, faster. Joined = cross-field "john smith".'
+        hint='Joined = cross-field "helen green". Separate = best single field.'
         value={config.fieldMode}
         options={[
-          { value: 'separate', label: 'separate (default)' },
-          { value: 'joined', label: 'joined' },
+          { value: 'joined', label: 'joined (default)' },
+          { value: 'separate', label: 'separate' },
         ]}
         onChange={(v) => onChange({ fieldMode: v as 'joined' | 'separate' })}
       />

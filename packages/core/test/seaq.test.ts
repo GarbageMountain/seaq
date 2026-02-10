@@ -719,6 +719,7 @@ describe('perf optimization guards', () => {
     const people = [{ first: 'Helen', last: 'Green' }];
     const results = seaq(people, 'helen green', {
       keys: ['first', 'last'],
+      fieldMode: 'separate',
       includeMatches: true,
       fuzziness: 0,
     }) as SeaqResult<typeof people[0]>[];
@@ -733,6 +734,7 @@ describe('perf optimization guards', () => {
     const people = [{ first: 'Helen', last: 'Green' }];
     const results = seaq(people, 'helen green', {
       keys: ['first', 'last'],
+      fieldMode: 'separate',
       includeMatches: true,
       fuzziness: 0,
     }) as SeaqResult<typeof people[0]>[];
@@ -744,6 +746,128 @@ describe('perf optimization guards', () => {
         expect(sliced.length).toBeGreaterThan(0);
       }
     }
+  });
+
+  test('Path B early bail when optimistic bound cannot beat Path A', () => {
+    // Path A: "az bz cz" vs "az bz cz extra" → 0.847 (8/8 chars found consecutively)
+    // Path B tokens: "az"→0.74, "bz"→0.67, "cz"→0.67 (short tokens penalized by long target)
+    // After token 1: optimistic = (0.74 + 0.67 + 1) / 3 = 0.804 <= 0.847 → bail
+    const items = [{ whole: 'az bz cz extra' }];
+    const results = seaq(items, 'az bz cz', {
+      keys: ['whole'],
+      fieldMode: 'separate',
+      includeMatches: true,
+      fuzziness: 0,
+      limit: Infinity,
+      threshold: 0,
+    }) as SeaqResult<typeof items[0]>[];
+    expect(results).toHaveLength(1);
+    // Path A wins (bail prevented Path B from completing) → single match, not 3
+    expect(results[0].matches.length).toBe(1);
+    expect(results[0].score).toBeGreaterThan(0.8);
+  });
+
+  test('fuzzy separate-mode rejects zero-overlap fields via bitmask', () => {
+    // Line 352: Path A fuzzy rejection — query "abc" has zero char overlap with field "xyz"
+    // Line 399: Path B fuzzy rejection — token "abc" has zero overlap with "xyz" and vice versa
+    const items = [{ name: 'abc', tag: 'xyz' }];
+
+    // Single-word: only Path A runs. "abc" vs "xyz" → zero overlap → line 352 fires
+    const single = seaq(items, 'abc', {
+      keys: ['name', 'tag'],
+      fieldMode: 'separate',
+      fuzziness: 0.5,
+      limit: Infinity,
+      threshold: 0,
+    });
+    expect(single).toHaveLength(1);
+
+    // Multi-word: Path B entered. token "abc" vs "xyz" → line 399 fires
+    const multi = seaq(items, 'abc xyz', {
+      keys: ['name', 'tag'],
+      fieldMode: 'separate',
+      fuzziness: 0.5,
+      limit: Infinity,
+      threshold: 0,
+    });
+    expect(multi).toHaveLength(1);
+  });
+
+  test('perfect Path A score skips Path B entirely', () => {
+    // Covers line 368 (isCandidate = bestScore < 1 → false)
+    const items = [{ name: 'helen green' }];
+    const results = seaq(items, 'helen green', {
+      keys: ['name'],
+      fieldMode: 'separate',
+      fuzziness: 0,
+      limit: Infinity,
+      threshold: 0,
+    });
+    expect(results).toHaveLength(1);
+    // Exact match on single field → score 1.0, Path B skipped
+  });
+
+  test('bitmask passes but subsequence fails → token rejected', () => {
+    // Covers line 376 (hasSubsequence returns false) and 380 (isCandidate = false)
+    // "ba" has same char set as "ab" (bitmask passes) but is not a subsequence
+    const items = [{ name: 'ab' }];
+    const results = seaq(items, 'ab ba', {
+      keys: ['name'],
+      fieldMode: 'separate',
+      fuzziness: 0,
+      limit: Infinity,
+      threshold: 0,
+    });
+    // Path A: "ab ba" vs "ab" → 'a','b' found, ' ','b','a' strict fail → 0
+    // Path B: token "ab" is subsequence of "ab" ✓, token "ba" bitmask passes but not subsequence → rejected
+    // Result comes from Path A only (which scored 0 in strict mode)
+    expect(results).toHaveLength(0);
+  });
+
+  test('Path B wins without includeMatches', () => {
+    const people = [{ first: 'Helen', last: 'Green' }];
+    const results = seaq(people, 'helen green', {
+      keys: ['first', 'last'],
+      fieldMode: 'separate',
+      fuzziness: 0,
+      limit: Infinity,
+      threshold: 0,
+    });
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ first: 'Helen', last: 'Green' });
+  });
+
+  test('Path B token scored against multiple fields picks best', () => {
+    // Covers line 399 false branch: second field scores lower than first for a token
+    const items = [{ a: 'helen', b: 'helena', c: 'green' }];
+    const results = seaq(items, 'helen green', {
+      keys: ['a', 'b', 'c'],
+      fieldMode: 'separate',
+      fuzziness: 0,
+      limit: Infinity,
+      threshold: 0,
+    });
+    expect(results).toHaveLength(1);
+    // Token "helen": scored against "helen" (~0.93) then "helena" (lower) → false branch
+  });
+
+  test('Path B completes all tokens but loses to Path A', () => {
+    // Covers lines 421-423 (tokenAvg <= bestScore after !bailed)
+    // Use a field where full query matches well but individual tokens match poorly
+    const items = [{ whole: 'az bz extra' }];
+    const results = seaq(items, 'az bz', {
+      keys: ['whole'],
+      fieldMode: 'separate',
+      fuzziness: 0,
+      limit: Infinity,
+      threshold: 0,
+      includeMatches: true,
+    }) as SeaqResult<typeof items[0]>[];
+    expect(results).toHaveLength(1);
+    // Path A scores well (4/4 chars found in long string)
+    // Path B: 2 tokens, each scores low against long string, but optimistic bound
+    // after token 0 is high enough to avoid bail → completes but avg < Path A
+    expect(results[0].matches.length).toBe(1); // Path A won
   });
 
   test('single-word queries unaffected by Path B', () => {

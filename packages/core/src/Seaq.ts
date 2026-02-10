@@ -54,11 +54,11 @@ export interface SeaqOptions<T> {
   /**
    * How multi-field scoring works when multiple `keys` are provided.
    *
-   * - `'separate'` (default) — scores each field independently and takes the best match.
-   *   ~30% faster and more precise than joined mode.
-   * - `'joined'` — concatenates all field values into one string before scoring.
+   * - `'joined'` (default) — concatenates all field values into one string before scoring.
    *   Supports cross-field queries like "john smith" matching firstName="John" + lastName="Smith",
-   *   but can produce noisy results when query characters scatter across fields.
+   *   and concatenated prefixes like "helgre" matching "Helen Green".
+   * - `'separate'` — scores each field independently and takes the best match.
+   *   More precise for single-field queries but cannot match across field boundaries.
    */
   fieldMode?: 'joined' | 'separate';
   /**
@@ -132,10 +132,12 @@ export function seaq<T>(list: Array<T>, query: string, options?: SeaqOptions<T>)
 export function seaq<T>(list: Array<T>, query: string, options?: SeaqOptions<T>): Array<T> | SeaqResult<T>[] {
   const keys = options?.keys as string[] | undefined;
   const fuzziness = options?.fuzziness === undefined ? 0.2 : options.fuzziness;
-  const fieldMode = options?.fieldMode ?? 'separate';
+  const fieldMode = options?.fieldMode ?? 'joined';
   const limit = options?.limit ?? 10;
   const threshold = options?.threshold ?? 0.3;
   const includeMatches = options?.includeMatches ?? false;
+
+  if (!query.trim()) return [];
 
   const { items: scored, maxScore } = scoreItems(list, query, keys, fuzziness, fieldMode, includeMatches);
 
@@ -415,12 +417,11 @@ function scoreItems<T>(
               }
             }
             if (!bailed) {
-              const tokenAvg = tokenScoreSum / tokens.length;
-              if (tokenAvg > bestScore) {
-                bestScore = tokenAvg;
-                if (includeMatches) {
-                  winDesc = { path: 'B', fieldIndices: tokenFieldIndices! };
-                }
+              // When !bailed, tokenAvg > bestScore is guaranteed: the bail check
+              // on the final iteration (remaining=0) would have fired otherwise.
+              bestScore = tokenScoreSum / tokens.length;
+              if (includeMatches) {
+                winDesc = { path: 'B', fieldIndices: tokenFieldIndices! };
               }
             }
           }
