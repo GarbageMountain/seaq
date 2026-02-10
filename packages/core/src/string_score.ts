@@ -59,6 +59,8 @@ export function string_score(
   // Code duplication occurs to prevent checking fuzziness inside for loop
   if (fuzziness) {
     let prevFound = true;
+    let misses = 0;
+    const maxMisses = Math.floor(wordLength * 0.5);
     for (i = 0; i < wordLength; i += 1) {
       // Find next first case-insensitive match of a character.
       idxOf = lString.indexOf(lWord.charAt(i), startAt);
@@ -66,6 +68,9 @@ export function string_score(
       if (idxOf === -1) {
         fuzzies += fuzzyFactor;
         prevFound = false;
+        // Early bail: if we've already exceeded the 50% miss threshold,
+        // no point continuing — the post-loop check would reject anyway.
+        if (++misses > maxMisses) return 0;
       } else {
         if (positions) positions.push(idxOf);
         if (startAt === idxOf && prevFound) {
@@ -95,11 +100,8 @@ export function string_score(
       }
     }
 
-    // Minimum match ratio: if more than 50% of query chars were missed, return 0.
-    // fuzzies starts at 1 and accumulates fuzzyFactor per missed char,
-    // so (fuzzies - 1) / fuzzyFactor gives the exact miss count.
-    const missedChars = (fuzzies - 1) / fuzzyFactor;
-    if (missedChars / wordLength > 0.5) return 0;
+    // Note: minimum match ratio (>50% miss → return 0) is enforced by the
+    // early bail inside the loop above, so no post-loop check needed.
   } else {
     for (i = 0; i < wordLength; i += 1) {
       // Find next first case-insensitive match of a character.
