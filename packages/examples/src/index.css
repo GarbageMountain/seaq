@@ -1,1 +1,13 @@
 @import "tailwindcss";
+
+mark {
+  background: #fde047;
+  padding: 0 1px;
+  border-radius: 1px;
+}
+@media (prefers-color-scheme: dark) {
+  mark {
+    background: #854d0e;
+    color: #fef9c3;
+  }
+}

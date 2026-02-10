@@ -492,12 +492,13 @@ export function ResultsColumn(props: ResultsColumnProps) {
         ) : (
           <>
             <ul className="space-y-0.5">
-              {result.results.map((text, i) => (
+              {result.highlighted.map((html, i) => (
                 <li key={i}>
                   <details className="group">
-                    <summary className="cursor-pointer truncate text-sm text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100">
-                      {text}
-                    </summary>
+                    <summary
+                      className="cursor-pointer whitespace-pre-wrap text-[11px] leading-snug text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100"
+                      dangerouslySetInnerHTML={{ __html: html }}
+                    />
                     <pre className="mt-1 mb-1 overflow-x-auto rounded bg-gray-900 px-2 py-1.5 text-[9px] leading-snug text-gray-100">
                       <code>{JSON.stringify(result.items[i], null, 2)}</code>
                     </pre>

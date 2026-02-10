@@ -8,6 +8,7 @@ import type { SeaqConfig, FuseConfig, MiniSearchConfig, UFuzzyConfig, LunrConfig
 
 export interface SearchResult {
   results: string[];
+  highlighted: string[];
   items: unknown[];
   timeMs: number;
   resultCount: number;
@@ -40,6 +41,7 @@ export function searchSeaq(dataset: DatasetConfig, query: string, config: SeaqCo
   const top = result.slice(0, 10);
   return {
     results: top.map(dataset.displayFn),
+    highlighted: top.map((item) => buildFieldsHtml(item, dataset.keys, (val) => esc(val))),
     items: top,
     timeMs,
     resultCount: result.length,
@@ -70,6 +72,7 @@ export function searchFuse(dataset: DatasetConfig, query: string, config: FuseCo
         minMatchCharLength: config.minMatchCharLength,
         isCaseSensitive: config.isCaseSensitive,
         includeScore: true,
+        includeMatches: true,
       };
       if (!isStringArray(dataset.data)) {
         opts.keys = keys;
@@ -83,8 +86,28 @@ export function searchFuse(dataset: DatasetConfig, query: string, config: FuseCo
   });
 
   const top = result.slice(0, 10);
+  const highlighted = top.map((r) =>
+    buildFieldsHtml(r.item, dataset.keys, (val, key) => {
+      if (!key) {
+        const match = r.matches?.[0];
+        if (match) return highlightRanges(val, match.indices as unknown as [number, number][]);
+        return esc(val);
+      }
+      const subs = new Set<string>();
+      for (const m of r.matches ?? []) {
+        if (m.key === key) {
+          for (const [start, end] of m.indices) {
+            subs.add((m.value ?? '').slice(start, end + 1));
+          }
+        }
+      }
+      if (subs.size > 0) return highlightTerms(val, [...subs]);
+      return esc(val);
+    }),
+  );
   return {
     results: top.map((r) => dataset.displayFn(r.item)),
+    highlighted,
     items: top.map((r) => r.item),
     timeMs,
     resultCount: result.length,
@@ -153,11 +176,16 @@ export function searchMiniSearch(dataset: DatasetConfig, query: string, config: 
     });
   });
 
-  const topIds = result.slice(0, 10).map((r) => r.id as number);
-  const topItems = topIds.map((id) => dataset.data[id]!);
+  const topResults = result.slice(0, 10);
+  const topItems = topResults.map((r) => dataset.data[r.id as number]!);
+  const highlighted = topResults.map((r, i) => {
+    const terms = Object.keys(r.match);
+    return buildFieldsHtml(topItems[i], dataset.keys, (val) => highlightTerms(val, terms));
+  });
 
   return {
     results: topItems.map(dataset.displayFn),
+    highlighted,
     items: topItems,
     timeMs,
     resultCount: result.length,
@@ -204,21 +232,37 @@ export function searchUFuzzy(dataset: DatasetConfig, query: string, config: UFuz
         : {}),
     });
     const [idxs, info, order] = uf.search(haystack, query);
-    if (!idxs) return [];
+    if (!idxs) return { entries: [] as { idx: number; ranges: number[] | null }[], haystack };
     if (!info || !order) {
-      return Array.from(idxs);
+      return { entries: Array.from(idxs).map((idx) => ({ idx, ranges: null })), haystack };
     }
-    return order.map((oi) => info.idx[oi]!);
+    return {
+      entries: order.map((oi) => ({ idx: info.idx[oi]!, ranges: info.ranges[oi] ?? null })),
+      haystack,
+    };
   });
 
-  const indices = result as number[];
-  const validIndices = indices.slice(0, 10).filter((idx) => idx != null && idx < dataset.data.length);
-  const topItems = validIndices.map((idx) => dataset.data[idx]!);
+  const { entries, haystack } = result;
+  const valid = entries.slice(0, 10).filter((e) => e.idx != null && e.idx < dataset.data.length);
+  const topItems = valid.map((e) => dataset.data[e.idx]!);
+  const isStr = isStringArray(dataset.data);
+  const highlighted = valid.map((e) => {
+    if (isStr && e.ranges) {
+      // String data: highlight the actual string with uFuzzy's ranges
+      return uFuzzy.highlight(haystack[e.idx]!, e.ranges, (part, matched) =>
+        matched ? `<mark>${esc(part)}</mark>` : esc(part),
+      );
+    }
+    // Object data: highlight query terms in field values
+    const terms = query.trim().split(/\s+/).filter(Boolean);
+    return buildFieldsHtml(dataset.data[e.idx]!, dataset.keys, (val) => highlightTerms(val, terms));
+  });
   return {
     results: topItems.map(dataset.displayFn),
+    highlighted,
     items: topItems,
     timeMs,
-    resultCount: indices.length,
+    resultCount: entries.length,
   };
 }
 
@@ -281,11 +325,16 @@ export function searchLunr(dataset: DatasetConfig, query: string, config: LunrCo
     }
   });
 
-  const topIds = result.slice(0, 10).map((r) => Number(r.ref));
-  const topItems = topIds.map((id) => dataset.data[id]!);
+  const topResults = result.slice(0, 10);
+  const topItems = topResults.map((r) => dataset.data[Number(r.ref)]!);
+  const highlighted = topResults.map((r, i) => {
+    const terms = Object.keys(r.matchData.metadata);
+    return buildFieldsHtml(topItems[i], dataset.keys, (val) => highlightTerms(val, terms));
+  });
 
   return {
     results: topItems.map(dataset.displayFn),
+    highlighted,
     items: topItems,
     timeMs,
     resultCount: result.length,
@@ -300,4 +349,65 @@ export function clearLunrCache() {
 
 function arraysEqual(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function highlightRanges(text: string, ranges: readonly (readonly [number, number])[]): string {
+  if (ranges.length === 0) return esc(text);
+  const sorted = [...ranges].sort((a, b) => a[0] - b[0]);
+  let html = '';
+  let pos = 0;
+  for (const [start, end] of sorted) {
+    if (start > pos) html += esc(text.slice(pos, start));
+    html += `<mark>${esc(text.slice(start, end + 1))}</mark>`;
+    pos = end + 1;
+  }
+  if (pos < text.length) html += esc(text.slice(pos));
+  return html;
+}
+
+function highlightTerms(text: string, terms: string[]): string {
+  if (terms.length === 0) return esc(text);
+  const sorted = [...terms].sort((a, b) => b.length - a.length);
+  const pattern = sorted.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const re = new RegExp(pattern, 'gi');
+  let html = '';
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    html += esc(text.slice(last, m.index));
+    html += `<mark>${esc(m[0])}</mark>`;
+    last = m.index + m[0].length;
+  }
+  html += esc(text.slice(last));
+  return html;
+}
+
+function resolveKey(item: unknown, key: string): string {
+  const parts = key.split('.');
+  let val: unknown = item;
+  for (const part of parts) {
+    if (val == null) break;
+    if (Array.isArray(val)) {
+      return val.map((v) => String((v as Record<string, unknown>)?.[part] ?? '')).join(', ');
+    }
+    val = (val as Record<string, unknown>)[part];
+  }
+  return String(val ?? '');
+}
+
+function buildFieldsHtml(
+  item: unknown,
+  keys: string[],
+  hlValue: (value: string, key: string) => string,
+): string {
+  if (keys.length === 0) return hlValue(String(item), '');
+  const pairs = keys.map((key) => {
+    const val = resolveKey(item, key);
+    return `  "${esc(key)}": "${hlValue(val, key)}"`;
+  });
+  return `{\n${pairs.join(',\n')}\n}`;
 }
