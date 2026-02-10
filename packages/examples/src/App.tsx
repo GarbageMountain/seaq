@@ -17,12 +17,11 @@ import { ResultsColumn } from './components/ResultsColumn';
 
 export type EngineKey = 'seaq' | 'fuse' | 'minisearch' | 'ufuzzy' | 'lunr';
 
-/** Walk a sample item and return all dot-paths that lead to a string value. */
-function discoverStringPaths(item: unknown, prefix = ''): string[] {
+/** Walk a single item and return all dot-paths that lead to a string value. */
+function discoverItemPaths(item: unknown, prefix = ''): string[] {
   if (item == null || typeof item !== 'object') return [];
-  // If it's an array, walk the first element with the same prefix
   if (Array.isArray(item)) {
-    return item.length > 0 ? discoverStringPaths(item[0], prefix) : [];
+    return item.length > 0 ? discoverItemPaths(item[0], prefix) : [];
   }
   const paths: string[] = [];
   for (const [key, val] of Object.entries(item as Record<string, unknown>)) {
@@ -30,10 +29,22 @@ function discoverStringPaths(item: unknown, prefix = ''): string[] {
     if (typeof val === 'string') {
       paths.push(path);
     } else if (typeof val === 'object' && val != null) {
-      paths.push(...discoverStringPaths(val, path));
+      paths.push(...discoverItemPaths(val, path));
     }
   }
   return paths;
+}
+
+/** Sample multiple items to discover all string paths, including optional fields. */
+function discoverStringPaths(data: unknown[]): string[] {
+  const seen = new Set<string>();
+  const sample = data.slice(0, 20);
+  for (const item of sample) {
+    for (const path of discoverItemPaths(item)) {
+      seen.add(path);
+    }
+  }
+  return [...seen];
 }
 
 export interface SeaqConfig {
@@ -89,7 +100,7 @@ export const defaultConfigs: EngineConfigs = {
   fuse: { threshold: 0.4, distance: 100, ignoreLocation: false, minMatchCharLength: 2, isCaseSensitive: false, preIndexed: true },
   minisearch: { fuzzy: 0.2, prefix: true, combineWith: 'OR', fuzzyWeight: 1, prefixWeight: 0.8, preIndexed: true },
   ufuzzy: { intraMode: 1, intraSub: 1, intraTrn: 1, intraDel: 1 },
-  lunr: { preIndexed: true, wildcard: false, editDistance: 1 },
+  lunr: { preIndexed: true, wildcard: true, editDistance: 0 },
 };
 
 const engineNames: Record<EngineKey, string> = {
@@ -110,7 +121,7 @@ export function App() {
 
   const rawDs = useMemo(() => datasets[dataset], [dataset]);
   const allPaths = useMemo(
-    () => (rawDs.data.length > 0 && typeof rawDs.data[0] === 'object' ? discoverStringPaths(rawDs.data[0]) : []),
+    () => (rawDs.data.length > 0 && typeof rawDs.data[0] === 'object' ? discoverStringPaths(rawDs.data as unknown[]) : []),
     [rawDs],
   );
   const effectiveKeys = selectedKeys.length > 0 ? selectedKeys : rawDs.keys;

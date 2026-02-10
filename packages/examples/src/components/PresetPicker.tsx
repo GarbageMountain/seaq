@@ -21,7 +21,7 @@ export const presets: Preset[] = [
   {
     label: 'Acronyms',
     description: 'seaq finds acronyms while others fail',
-    dataset: 'places',
+    dataset: 'phrases',
     query: 'NYC',
   },
   {

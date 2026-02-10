@@ -1,4 +1,5 @@
 import contactsJson from './data/contacts.json';
+import citiesJson from './data/cities.json';
 
 export interface Book {
   title: string;
@@ -11,8 +12,15 @@ export interface Contact {
   givenName: string;
   middleName: string;
   emailAddresses: Array<{ label: string; email: string }>;
-  phoneNumbers: Array<{ label: string; email: string }>;
-  thumbnailPath: string;
+  phoneNumbers: Array<{ label: string; number: string }>;
+}
+
+export interface City {
+  name: string;
+  countryCode: string;
+  coord: { lat: number; lon: number };
+  population: number;
+  state?: string;
 }
 
 export const books: Book[] = [
@@ -41,7 +49,11 @@ export const books: Book[] = [
   { title: "Monster 1959", author: { firstName: "David", lastName: "Maine" } },
 ];
 
-export const places: string[] = [
+// Consolidated from the old places, techTerms, and companies datasets.
+// Mix of geography, tech acronyms, and organizations for demonstrating
+// acronym matching, fuzzy search, and substring ranking on plain strings.
+export const phrases: string[] = [
+  // Places — good for acronym + prefix demos
   'New York City',
   'Los Angeles',
   'San Francisco',
@@ -50,20 +62,17 @@ export const places: string[] = [
   'Salt Lake City',
   'Kansas City',
   'Oklahoma City',
-  'New York',
   'North Carolina',
   'South Carolina',
   'West Virginia',
   'New Hampshire',
   'New Jersey',
   'New Mexico',
-  'Hillsdale Michigan',
-  'Historical Museum',
-  'High Mountain',
-  'himalayas',
-];
-
-export const techTerms: string[] = [
+  'San Juan',
+  'El Paso',
+  'Rio Grande',
+  'District of Columbia',
+  // Tech terms — full forms for acronym search
   'Application Programming Interface',
   'Graphical User Interface',
   'Command Line Interface',
@@ -77,27 +86,30 @@ export const techTerms: string[] = [
   'Search Engine Optimization',
   'User Experience Design',
   'User Interface Design',
-];
-
-export const companies: string[] = [
+  'Machine Learning',
+  'Artificial Intelligence',
+  'Natural Language Processing',
+  'Virtual Private Network',
+  'Content Delivery Network',
+  // Organizations — acronym-heavy
   'International Business Machines',
-  'American Telephone Telegraph',
+  'American Telephone & Telegraph',
   'Hewlett Packard Enterprise',
   'General Electric Company',
-  'Federal Bureau Investigation',
+  'Federal Bureau of Investigation',
   'Central Intelligence Agency',
-  'National Aeronautics Space Administration',
-  'United States America',
-  'United Kingdom',
-  'European Union',
+  'National Aeronautics & Space Administration',
   'International Monetary Fund',
   'World Health Organization',
   'North Atlantic Treaty Organization',
+  'European Space Agency',
+  'United Nations',
 ];
 
 export const contacts: Contact[] = contactsJson as Contact[];
+export const cities: City[] = citiesJson as City[];
 
-export type DatasetKey = 'books' | 'contacts' | 'places' | 'techTerms' | 'companies';
+export type DatasetKey = 'books' | 'contacts' | 'cities' | 'phrases';
 
 export interface DatasetConfig {
   label: string;
@@ -114,6 +126,11 @@ function contactDisplay(item: unknown): string {
 function bookDisplay(item: unknown): string {
   const b = item as Book;
   return `${b.title} — ${b.author.firstName} ${b.author.lastName}`;
+}
+
+function cityDisplay(item: unknown): string {
+  const c = item as City;
+  return c.state ? `${c.name}, ${c.state}, ${c.countryCode}` : `${c.name}, ${c.countryCode}`;
 }
 
 function stringDisplay(item: unknown): string {
@@ -133,21 +150,15 @@ export const datasets: Record<DatasetKey, DatasetConfig> = {
     keys: ['givenName', 'familyName', 'middleName'],
     displayFn: contactDisplay,
   },
-  places: {
-    label: 'Places (19)',
-    data: places,
-    keys: [],
-    displayFn: stringDisplay,
+  cities: {
+    label: '20K Cities',
+    data: cities,
+    keys: ['name', 'state'],
+    displayFn: cityDisplay,
   },
-  techTerms: {
-    label: 'Tech Terms (13)',
-    data: techTerms,
-    keys: [],
-    displayFn: stringDisplay,
-  },
-  companies: {
-    label: 'Companies (13)',
-    data: companies,
+  phrases: {
+    label: 'Phrases (48)',
+    data: phrases,
     keys: [],
     displayFn: stringDisplay,
   },

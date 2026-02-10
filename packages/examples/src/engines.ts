@@ -69,11 +69,11 @@ export function searchSeaq(dataset: DatasetConfig, query: string, config: SeaqCo
         });
       }
       if (match) {
-        // Joined mode: highlight the joined string's ranges on the individual fields
-        // Map ranges from the joined string back to field values
+        // Joined mode: extract the actual matched substrings from the joined
+        // string and use them as highlight terms on individual field values.
+        // This works for fuzzy matches (where raw query terms wouldn't match).
+        const terms = match.indices.map(([s, e]) => match.value.slice(s, e + 1));
         return buildFieldsHtml(r.item, dataset.keys, (val) => {
-          // Use term-based highlighting from the query
-          const terms = query.trim().split(/\s+/).filter(Boolean);
           return highlightTerms(val, terms);
         });
       }
@@ -130,11 +130,28 @@ export function searchFuse(dataset: DatasetConfig, query: string, config: FuseCo
         if (match) return highlightRanges(val, match.indices as unknown as [number, number][]);
         return esc(val);
       }
+      // Try range-based highlighting for the first match on this key
+      for (const m of r.matches ?? []) {
+        if (m.key === key && m.value) {
+          if (val === m.value) {
+            return highlightRanges(val, m.indices as unknown as [number, number][]);
+          }
+          // Array field: val is comma-joined, m.value is a single element
+          const idx = val.indexOf(m.value);
+          if (idx !== -1) {
+            const offsetRanges = (m.indices as [number, number][]).map(
+              ([s, e]) => [s + idx, e + idx] as [number, number],
+            );
+            return highlightRanges(val, offsetRanges);
+          }
+        }
+      }
+      // Fallback: extract matched substrings as terms
       const subs = new Set<string>();
       for (const m of r.matches ?? []) {
-        if (m.key === key) {
+        if (m.key === key && m.value) {
           for (const [start, end] of m.indices) {
-            subs.add((m.value ?? '').slice(start, end + 1));
+            subs.add(m.value.slice(start, end + 1));
           }
         }
       }
@@ -254,6 +271,10 @@ export function searchUFuzzy(dataset: DatasetConfig, query: string, config: UFuz
             let val: unknown = obj;
             for (const part of parts) {
               if (val == null) break;
+              if (Array.isArray(val)) {
+                val = val.map((v) => String((v as Record<string, unknown>)?.[part] ?? '')).join(' ');
+                break;
+              }
               val = (val as Record<string, unknown>)[part];
             }
             return String(val ?? '');
@@ -368,9 +389,11 @@ export function searchLunr(dataset: DatasetConfig, query: string, config: LunrCo
 
   const topResults = result.slice(0, 10);
   const topItems = topResults.map((r) => dataset.data[Number(r.ref)]!);
-  const highlighted = topResults.map((r, i) => {
-    const terms = Object.keys(r.matchData.metadata);
-    return buildFieldsHtml(topItems[i], dataset.keys, (val) => highlightTerms(val, terms));
+  // Use original query terms, not Lunr's stemmed metadata keys.
+  // Lunr stems words (e.g. "running" → "run") which causes partial highlights.
+  const lunrTerms = query.trim().split(/\s+/).filter(Boolean);
+  const highlighted = topResults.map((_r, i) => {
+    return buildFieldsHtml(topItems[i], dataset.keys, (val) => highlightTerms(val, lunrTerms));
   });
 
   return {
