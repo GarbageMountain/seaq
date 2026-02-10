@@ -143,7 +143,7 @@ export function App() {
   }, [query, ds, configs]);
 
   return (
-    <div className="mx-auto min-h-screen max-w-[100rem] px-4 py-8">
+    <div className="mx-auto min-h-screen max-w-[100rem] bg-white px-4 py-8 dark:bg-gray-900">
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
           seaq — Interactive Search Comparison
