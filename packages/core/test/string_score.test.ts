@@ -108,6 +108,39 @@ describe('string_score', () => {
     });
   });
 
+  describe('consecutive bonus after fuzzy skip', () => {
+    test('skipped char should not grant consecutive bonus to next match', () => {
+      // "btn" vs "tsconfig.json": 'b' is not found (fuzzy skip), then 't' at
+      // index 0 should NOT get the 0.7 consecutive bonus just because startAt
+      // hasn't moved. This is a false positive — 't' is not consecutive with
+      // any matched character.
+      const tsconfig = string_score('tsconfig.json', 'btn', 0.2);
+      const button = string_score('src/components/Button.tsx', 'btn', 0.2);
+      // Button.tsx matches all 3 chars (b, t, n in "Button") — should outscore
+      // tsconfig.json which misses 'b' entirely
+      expect(button).toBeGreaterThan(tsconfig);
+    });
+
+    test('consecutive bonus still works for actually consecutive matches', () => {
+      // "hel" vs "hello" — all chars found consecutively, should still get bonus
+      const withFuzz = string_score('hello', 'hel', 0.2);
+      const strict = string_score('hello', 'hel', 0);
+      // Fuzzy with no skips should score the same as strict
+      expect(withFuzz).toBe(strict);
+    });
+
+    test('genuine consecutive after a fuzzy skip is not penalized', () => {
+      // "xbc" vs "abcd" — 'x' is skipped, then 'b','c' are genuinely
+      // consecutive with each other. 'b' should NOT get consecutive bonus
+      // (it follows a skip), but 'c' SHOULD (it follows matched 'b').
+      const score = string_score('abcd', 'xbc', 0.5);
+      expect(score).toBeGreaterThan(0);
+      // Compare with "xbd" where 'b','d' are NOT consecutive
+      const scattered = string_score('abcd', 'xbd', 0.5);
+      expect(score).toBeGreaterThan(scattered);
+    });
+  });
+
   describe('first character bonus', () => {
     test('matching first character boosts score', () => {
       // Query starting with same letter as target gets +0.15 bonus

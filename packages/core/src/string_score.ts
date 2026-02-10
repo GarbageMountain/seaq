@@ -58,16 +58,19 @@ export function string_score(
   // Walk through word and add up scores.
   // Code duplication occurs to prevent checking fuzziness inside for loop
   if (fuzziness) {
+    let prevFound = true;
     for (i = 0; i < wordLength; i += 1) {
       // Find next first case-insensitive match of a character.
       idxOf = lString.indexOf(lWord.charAt(i), startAt);
 
       if (idxOf === -1) {
         fuzzies += fuzzyFactor;
+        prevFound = false;
       } else {
         if (positions) positions.push(idxOf);
-        if (startAt === idxOf) {
-          // Consecutive letter & start-of-string Bonus
+        if (startAt === idxOf && prevFound) {
+          // Consecutive letter bonus — only when the previous query char
+          // was also found (not skipped via fuzziness)
           charScore = 0.7;
         } else {
           charScore = 0.1;
@@ -88,6 +91,7 @@ export function string_score(
         // Update scores and startAt position for next round of indexOf
         runningScore += charScore;
         startAt = idxOf + 1;
+        prevFound = true;
       }
     }
   } else {

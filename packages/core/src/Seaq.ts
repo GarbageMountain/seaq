@@ -62,13 +62,23 @@ export interface SeaqOptions<T> {
    */
   fieldMode?: 'joined' | 'separate';
   /**
-   * Maximum number of results to return.
+   * Maximum number of results to return. Default: `10`.
    *
    * Uses a min-heap internally for O(n log k) selection instead of
    * O(n log n) full sort, so this is significantly faster than sorting
    * everything and calling `.slice(0, n)` on large result sets.
+   *
+   * Set to `Infinity` to return all matches (not recommended for large lists).
    */
   limit?: number;
+  /**
+   * Relative score cutoff — results below `topScore * threshold` are dropped.
+   *
+   * - `0.3` (default) — keeps results scoring at least 30% of the best match
+   * - `0` — no filtering, returns everything with score > 0 (old behavior)
+   * - `1` — only perfect/near-perfect matches
+   */
+  threshold?: number;
   /**
    * When `true`, returns {@link SeaqResult} objects with match metadata
    * (character positions, matched value, score) instead of plain items.
@@ -123,16 +133,20 @@ export function seaq<T>(list: Array<T>, query: string, options?: SeaqOptions<T>)
   const keys = options?.keys as string[] | undefined;
   const fuzziness = options?.fuzziness === undefined ? 0.2 : options.fuzziness;
   const fieldMode = options?.fieldMode ?? 'separate';
-  const limit = options?.limit;
+  const limit = options?.limit ?? 10;
+  const threshold = options?.threshold ?? 0.3;
   const includeMatches = options?.includeMatches ?? false;
 
-  const scored = scoreItems(list, query, keys, fuzziness, fieldMode, includeMatches);
+  const { items: scored, maxScore } = scoreItems(list, query, keys, fuzziness, fieldMode, includeMatches);
+
+  const cutoff = maxScore * threshold;
+  const filtered = cutoff > 0 ? scored.filter((m) => m.score >= cutoff) : scored;
 
   let sorted: Array<MetaDataItem<T>>;
-  if (limit !== undefined && limit > 0) {
-    sorted = getTopN(scored, limit);
+  if (limit !== undefined && limit > 0 && isFinite(limit)) {
+    sorted = getTopN(filtered, limit);
   } else {
-    sorted = scored.sort((a, b) => b.score - a.score);
+    sorted = filtered.sort((a, b) => b.score - a.score);
   }
 
   if (includeMatches) {
@@ -245,11 +259,12 @@ function scoreItems<T>(
   fuzziness: number | undefined,
   fieldMode: 'joined' | 'separate',
   includeMatches: boolean,
-): Array<MetaDataItem<T>> {
+): { items: Array<MetaDataItem<T>>; maxScore: number } {
   // Pre-lowercase query once instead of per-item
   const lowerQuery = query.toLowerCase();
 
   const result: Array<MetaDataItem<T>> = [];
+  let maxScore = 0;
 
   for (const item of list) {
     let score: number;
@@ -312,11 +327,12 @@ function scoreItems<T>(
 
     // Only include items with score > 0
     if (score > 0) {
+      if (score > maxScore) maxScore = score;
       result.push({ item, score, matches });
     }
   }
 
-  return result;
+  return { items: result, maxScore };
 }
 
 interface MetaDataItem<T> {
