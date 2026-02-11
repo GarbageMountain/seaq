@@ -1,10 +1,11 @@
 import { seaq } from 'seaq';
+import { seaq as seaqV1 } from 'seaq-v1';
 import Fuse from 'fuse.js';
 import MiniSearch from 'minisearch';
 import uFuzzy from '@leeoniya/ufuzzy';
 import lunr from 'lunr';
 import type { DatasetConfig } from './data';
-import type { SeaqConfig, FuseConfig, MiniSearchConfig, UFuzzyConfig, LunrConfig } from './App';
+import type { SeaqConfig, SeaqV1Config, FuseConfig, MiniSearchConfig, UFuzzyConfig, LunrConfig } from './App';
 
 export interface SearchResult {
   results: string[];
@@ -81,6 +82,31 @@ export function searchSeaq(dataset: DatasetConfig, query: string, config: SeaqCo
       return buildFieldsHtml(r.item, dataset.keys, (val) => esc(val));
     }),
     items: top.map((r) => r.item),
+    timeMs,
+    resultCount: result.length,
+  };
+}
+
+// ── seaq v1 ──
+
+export function searchSeaqV1(dataset: DatasetConfig, query: string, config: SeaqV1Config): SearchResult {
+  const keys = dataset.keys;
+  const { result, timeMs } = timed(() => {
+    return seaqV1(
+      dataset.data,
+      query,
+      keys.length > 0 ? keys : undefined,
+      config.fuzziness || undefined,
+    );
+  });
+  const top = result.slice(0, 10);
+  const terms = query.trim().split(/\s+/).filter(Boolean);
+  return {
+    results: top.map((item) => dataset.displayFn(item)),
+    highlighted: top.map((item) => {
+      return buildFieldsHtml(item, dataset.keys, (val) => highlightTerms(val, terms));
+    }),
+    items: top,
     timeMs,
     resultCount: result.length,
   };

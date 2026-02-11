@@ -1161,6 +1161,7 @@ __metadata:
     react: "npm:^19.0.0"
     react-dom: "npm:^19.0.0"
     seaq: "workspace:*"
+    seaq-v1: "npm:seaq@1.1.5"
     tailwindcss: "npm:^4.0.0"
     typescript: "npm:^5.8.0"
     vite: "npm:^6.0.0"
@@ -3013,7 +3014,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"seaq@npm:1.1.5":
+"seaq-v1@npm:seaq@1.1.5, seaq@npm:1.1.5":
   version: 1.1.5
   resolution: "seaq@npm:1.1.5"
   checksum: 10c0/fbe12ac95ba81ff40089c7bc4717a1982ce9585c833dbde7857fb78589182746e7056e0d7f37b2afcbdd4d07707f6a7810a4953b2e6bc36db03df5cd2c8c6a80

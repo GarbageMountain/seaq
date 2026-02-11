@@ -16,7 +16,8 @@
     "minisearch": "^7.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "seaq": "workspace:*"
+    "seaq": "workspace:*",
+    "seaq-v1": "npm:seaq@1.1.5"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

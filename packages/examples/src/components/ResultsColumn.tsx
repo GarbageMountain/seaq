@@ -5,6 +5,7 @@ import {
   type EngineConfigs,
   type ArrayKeyMap,
   type SeaqConfig,
+  type SeaqV1Config,
   type FuseConfig,
   type MiniSearchConfig,
   type UFuzzyConfig,
@@ -49,6 +50,13 @@ function seaqSnippet(query: string, keys: string[], config: SeaqConfig): string 
   if (config.threshold !== 0.3) opts.push(`threshold: ${config.threshold}`);
   const optsStr = opts.length > 0 ? `, {\n  ${opts.join(',\n  ')}\n}` : '';
   return `seaq(data, ${q(query)}${optsStr})`;
+}
+
+function seaqV1Snippet(query: string, keys: string[], config: SeaqV1Config): string {
+  const args: string[] = [`data`, q(query)];
+  if (keys.length > 0) args.push(`[${keys.map(q).join(', ')}]`);
+  if (config.fuzziness) args.push(String(config.fuzziness));
+  return `seaq(${args.join(', ')})`;
 }
 
 function fuseSnippet(query: string, keys: string[], config: FuseConfig): string {
@@ -178,6 +186,8 @@ function codeSnippet(engineKey: EngineKey, query: string, keys: string[], arrayK
   switch (engineKey) {
     case 'seaq':
       return seaqSnippet(dq, keys, config as SeaqConfig);
+    case 'seaqv1':
+      return seaqV1Snippet(dq, keys, config as SeaqV1Config);
     case 'fuse':
       return fuseSnippet(dq, keys, config as FuseConfig);
     case 'minisearch':
@@ -286,6 +296,26 @@ function SeaqControls({ config, onChange }: { config: SeaqConfig; onChange: (p: 
           { value: 'off', label: 'All' },
         ]}
         onChange={(v) => onChange({ limit: v === 'off' ? undefined : Number(v) })}
+      />
+    </>
+  );
+}
+
+function SeaqV1Controls({ config, onChange }: { config: SeaqV1Config; onChange: (p: Partial<SeaqV1Config>) => void }) {
+  return (
+    <>
+      <Select
+        label="Fuzziness"
+        hint="Typo tolerance. 0 = strict (v1 default)."
+        value={config.fuzziness}
+        options={[
+          { value: '0', label: '0 (strict)' },
+          { value: '0.2', label: '0.2 (default)' },
+          { value: '0.5', label: '0.5' },
+          { value: '0.8', label: '0.8' },
+          { value: '1', label: '1' },
+        ]}
+        onChange={(v) => onChange({ fuzziness: Number(v) })}
       />
     </>
   );
@@ -498,6 +528,8 @@ function ConfigControls({ engineKey, config, onConfigChange }: ResultsColumnProp
   switch (engineKey) {
     case 'seaq':
       return <SeaqControls config={config as SeaqConfig} onChange={onConfigChange as any} />;
+    case 'seaqv1':
+      return <SeaqV1Controls config={config as SeaqV1Config} onChange={onConfigChange as any} />;
     case 'fuse':
       return <FuseControls config={config as FuseConfig} onChange={onConfigChange as any} />;
     case 'minisearch':

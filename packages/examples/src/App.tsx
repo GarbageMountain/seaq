@@ -8,6 +8,7 @@ import {
   searchLunr,
   searchMiniSearch,
   searchSeaq,
+  searchSeaqV1,
   searchUFuzzy,
   type SearchResult,
 } from './engines';
@@ -15,7 +16,7 @@ import { SearchInput } from './components/SearchInput';
 import { DatasetPicker } from './components/DatasetPicker';
 import { ResultsColumn } from './components/ResultsColumn';
 
-export type EngineKey = 'seaq' | 'fuse' | 'minisearch' | 'ufuzzy' | 'lunr';
+export type EngineKey = 'seaq' | 'seaqv1' | 'fuse' | 'minisearch' | 'ufuzzy' | 'lunr';
 
 /** Walk a single item and return all dot-paths that lead to a string value. */
 function discoverItemPaths(item: unknown, prefix = ''): string[] {
@@ -54,6 +55,10 @@ export interface SeaqConfig {
   threshold: number;
 }
 
+export interface SeaqV1Config {
+  fuzziness: number;
+}
+
 export interface FuseConfig {
   threshold: number;
   distance: number;
@@ -90,6 +95,7 @@ export type ArrayKeyMap = Record<string, { arrayPath: string; innerPath: string 
 
 export interface EngineConfigs {
   seaq: SeaqConfig;
+  seaqv1: SeaqV1Config;
   fuse: FuseConfig;
   minisearch: MiniSearchConfig;
   ufuzzy: UFuzzyConfig;
@@ -98,6 +104,7 @@ export interface EngineConfigs {
 
 export const defaultConfigs: EngineConfigs = {
   seaq: { fuzziness: 0.2, fieldMode: 'joined', limit: 10, threshold: 0.3 },
+  seaqv1: { fuzziness: 0.2 },
   fuse: { threshold: 0.4, distance: 100, ignoreLocation: false, minMatchCharLength: 2, isCaseSensitive: false, preIndexed: true },
   minisearch: { fuzzy: 0.2, prefix: true, combineWith: 'OR', fuzzyWeight: 1, prefixWeight: 0.8, preIndexed: true },
   ufuzzy: { intraMode: 1, intraSub: 1, intraTrn: 1, intraDel: 1 },
@@ -106,13 +113,14 @@ export const defaultConfigs: EngineConfigs = {
 
 const engineNames: Record<EngineKey, string> = {
   seaq: 'seaq',
+  seaqv1: 'seaq v1',
   fuse: 'Fuse.js',
   minisearch: 'MiniSearch',
   ufuzzy: 'uFuzzy',
   lunr: 'Lunr',
 };
 
-const engineOrder: EngineKey[] = ['seaq', 'fuse', 'minisearch', 'ufuzzy', 'lunr'];
+const engineOrder: EngineKey[] = ['seaq', 'seaqv1', 'fuse', 'minisearch', 'ufuzzy', 'lunr'];
 
 export function App() {
   const [query, setQuery] = useState('');
@@ -169,10 +177,11 @@ export function App() {
   // Run search synchronously on every render — no debounce
   const results = useMemo<Record<EngineKey, SearchResult | null>>(() => {
     const q = query.trim();
-    if (!q) return { seaq: null, fuse: null, minisearch: null, ufuzzy: null, lunr: null };
+    if (!q) return { seaq: null, seaqv1: null, fuse: null, minisearch: null, ufuzzy: null, lunr: null };
 
     return {
       seaq: searchSeaq(ds, q, configs.seaq),
+      seaqv1: searchSeaqV1(ds, q, configs.seaqv1),
       fuse: searchFuse(ds, q, configs.fuse),
       minisearch: searchMiniSearch(ds, q, configs.minisearch),
       ufuzzy: searchUFuzzy(ds, q, configs.ufuzzy),
@@ -187,7 +196,7 @@ export function App() {
           seaq — Interactive Search Comparison
         </h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Compare seaq against Fuse.js, MiniSearch, uFuzzy, and Lunr with live results and performance timings.
+          Compare seaq v1 &amp; v2 against Fuse.js, MiniSearch, uFuzzy, and Lunr with live results and performance timings.
         </p>
       </header>
 
@@ -236,7 +245,7 @@ export function App() {
         </details>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {engineOrder.map((engine) => (
           <ResultsColumn
             key={engine}
