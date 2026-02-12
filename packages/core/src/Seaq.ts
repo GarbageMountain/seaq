@@ -432,7 +432,12 @@ function scoreItems<T>(
           winDesc = { path: 'A', fieldIdx: winFieldIdx, valueIdx: winValueIdx };
         }
       } else {
-        // Join all field values and score as one string
+        // Join all field values and score as one string.
+        // TODO: consider returning per-field indices for joined mode to make
+        // highlighting easier for consumers. Currently indices are relative to
+        // the joined string so callers have to reverse-map them back to
+        // individual fields. Need to evaluate whether tracking field offsets
+        // during scoring adds meaningful overhead.
         const searchString = keys
           .map((key) => getProperty(item, key).join(' '))
           .join(' ');

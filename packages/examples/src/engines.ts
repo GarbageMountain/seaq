@@ -45,41 +45,50 @@ export function searchSeaq(dataset: DatasetConfig, query: string, config: SeaqCo
   return {
     results: top.map((r) => dataset.displayFn(r.item)),
     highlighted: top.map((r) => {
-      const match = r.matches?.[0];
-      if (match && keys.length === 0) {
-        // String/no-keys mode: highlight directly using indices
-        return highlightRanges(match.value, match.indices);
+      const matches = r.matches;
+      if (!matches || matches.length === 0) {
+        return buildFieldsHtml(r.item, dataset.keys, (val) => esc(val));
       }
-      if (match && match.key) {
-        // Separate mode: highlight the matched key's value
+
+      const first = matches[0]!;
+
+      // String/no-keys mode: highlight directly using indices
+      if (keys.length === 0) {
+        return highlightRanges(first.value, first.indices);
+      }
+
+      // Separate mode (matches have .key): highlight ALL matched fields
+      if (first.key) {
         return buildFieldsHtml(r.item, dataset.keys, (val, key) => {
-          if (key === match.key) {
-            if (val === match.value) {
-              return highlightRanges(val, match.indices);
-            }
-            // Array field: val is comma-joined, match.value is a single element.
-            // Find the matched element within the joined string and offset ranges.
-            const idx = val.indexOf(match.value);
-            if (idx !== -1) {
-              const offsetRanges = match.indices.map(
-                ([s, e]) => [s + idx, e + idx] as [number, number],
-              );
-              return highlightRanges(val, offsetRanges);
-            }
+          const match = matches.find((m) => m.key === key);
+          if (!match) return esc(val);
+          if (val === match.value) {
+            return highlightRanges(val, match.indices);
+          }
+          // Array field: val is comma-joined, match.value is a single element.
+          // Find the matched element within the joined string and offset ranges.
+          const idx = val.indexOf(match.value);
+          if (idx !== -1) {
+            const offsetRanges = match.indices.map(
+              ([s, e]) => [s + idx, e + idx] as [number, number],
+            );
+            return highlightRanges(val, offsetRanges);
           }
           return esc(val);
         });
       }
-      if (match) {
-        // Joined mode: extract the actual matched substrings from the joined
-        // string and use them as highlight terms on individual field values.
-        // This works for fuzzy matches (where raw query terms wouldn't match).
-        const terms = match.indices.map(([s, e]) => match.value.slice(s, e + 1));
-        return buildFieldsHtml(r.item, dataset.keys, (val) => {
-          return highlightTerms(val, terms);
-        });
-      }
-      return buildFieldsHtml(r.item, dataset.keys, (val) => esc(val));
+
+      // Joined mode: extract matched substrings and split at word boundaries
+      // so cross-field terms like "Helen Green" become ["Helen", "Green"].
+      // This is a best-effort approach — the core returns indices relative to
+      // the joined string with no per-field breakdown.
+      const terms = first.indices
+        .map(([s, e]) => first.value.slice(s, e + 1))
+        .flatMap((t) => t.split(/\s+/))
+        .filter(Boolean);
+      return buildFieldsHtml(r.item, dataset.keys, (val) => {
+        return highlightTerms(val, terms);
+      });
     }),
     items: top.map((r) => r.item),
     timeMs,
