@@ -14,7 +14,8 @@
       "WebSearch",
       "WebFetch(domain:www.fusejs.io)",
       "Bash(ls:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": [],
     "ask": []
