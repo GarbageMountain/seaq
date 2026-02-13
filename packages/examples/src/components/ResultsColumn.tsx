@@ -3,6 +3,7 @@ import {
   defaultConfigs,
   type EngineKey,
   type EngineConfigs,
+  type EngineToggle,
   type ArrayKeyMap,
   type SeaqConfig,
   type SeaqV1Config,
@@ -21,6 +22,9 @@ interface ResultsColumnProps {
   result: SearchResult | null;
   config: EngineConfigs[EngineKey];
   onConfigChange: (patch: Partial<EngineConfigs[EngineKey]>) => void;
+  toggle: EngineToggle;
+  onToggle: (patch: Partial<EngineToggle>) => void;
+  active: boolean;
 }
 
 function timingColor(ms: number): string {
@@ -543,15 +547,47 @@ function ConfigControls({ engineKey, config, onConfigChange }: ResultsColumnProp
 
 // ── Main component ──
 
+const toggleBtnBase = 'w-5 h-5 rounded text-[10px] font-bold leading-none transition-colors';
+
 export function ResultsColumn(props: ResultsColumnProps) {
-  const { name, query, keys, arrayKeyMap, engineKey, config, result } = props;
+  const { name, query, keys, arrayKeyMap, engineKey, config, result, toggle, onToggle, active } = props;
   const snippet = codeSnippet(engineKey, query, keys, arrayKeyMap, config);
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+    <div className={`flex min-w-0 flex-1 flex-col rounded-lg border shadow-sm transition-opacity ${
+      active
+        ? 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'
+        : 'border-gray-200/50 bg-gray-50 opacity-40 dark:border-gray-700/50 dark:bg-gray-800/50'
+    }`}>
       {/* Header */}
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{name}</h3>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            title="Solo — only run this engine (Shift+click to add)"
+            className={`${toggleBtnBase} ${
+              toggle.soloed
+                ? 'bg-amber-400 text-amber-900 hover:bg-amber-500'
+                : 'bg-gray-200 text-gray-500 hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-400 dark:hover:bg-gray-500'
+            }`}
+            onClick={() => onToggle({ soloed: !toggle.soloed })}
+          >
+            S
+          </button>
+          <button
+            type="button"
+            title="Mute — disable this engine"
+            className={`${toggleBtnBase} ${
+              toggle.muted
+                ? 'bg-red-500 text-white hover:bg-red-600'
+                : 'bg-gray-200 text-gray-500 hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-400 dark:hover:bg-gray-500'
+            }`}
+            onClick={() => onToggle({ muted: !toggle.muted })}
+          >
+            M
+          </button>
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{name}</h3>
+        </div>
         <div className="flex items-center gap-2">
           <button
             type="button"

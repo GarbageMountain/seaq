@@ -122,11 +122,32 @@ const engineNames: Record<EngineKey, string> = {
 
 const engineOrder: EngineKey[] = ['seaq', 'seaqv1', 'fuse', 'minisearch', 'ufuzzy', 'lunr'];
 
+export type EngineToggle = { muted: boolean; soloed: boolean };
+
+const defaultToggles: Record<EngineKey, EngineToggle> = Object.fromEntries(
+  engineOrder.map((k) => [k, { muted: false, soloed: false }]),
+) as Record<EngineKey, EngineToggle>;
+
 export function App() {
   const [query, setQuery] = useState('');
   const [dataset, setDataset] = useState<DatasetKey>('contacts');
   const [configs, setConfigs] = useState<EngineConfigs>(defaultConfigs);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [toggles, setToggles] = useState<Record<EngineKey, EngineToggle>>(defaultToggles);
+
+  const anySoloed = engineOrder.some((k) => toggles[k].soloed);
+  const isActive = useCallback(
+    (engine: EngineKey) => {
+      if (toggles[engine].muted) return false;
+      if (anySoloed) return toggles[engine].soloed;
+      return true;
+    },
+    [toggles, anySoloed],
+  );
+
+  const setToggle = useCallback((engine: EngineKey, patch: Partial<EngineToggle>) => {
+    setToggles((prev) => ({ ...prev, [engine]: { ...prev[engine], ...patch } }));
+  }, []);
 
   const rawDs = useMemo(() => datasets[dataset], [dataset]);
   const allPaths = useMemo(
@@ -175,19 +196,27 @@ export function App() {
   }, []);
 
   // Run search synchronously on every render — no debounce
+  // Only run active (non-muted, respecting solo) engines.
   const results = useMemo<Record<EngineKey, SearchResult | null>>(() => {
     const q = query.trim();
-    if (!q) return { seaq: null, seaqv1: null, fuse: null, minisearch: null, ufuzzy: null, lunr: null };
+    const empty: Record<EngineKey, SearchResult | null> = { seaq: null, seaqv1: null, fuse: null, minisearch: null, ufuzzy: null, lunr: null };
+    if (!q) return empty;
 
-    return {
-      seaq: searchSeaq(ds, q, configs.seaq),
-      seaqv1: searchSeaqV1(ds, q, configs.seaqv1),
-      fuse: searchFuse(ds, q, configs.fuse),
-      minisearch: searchMiniSearch(ds, q, configs.minisearch),
-      ufuzzy: searchUFuzzy(ds, q, configs.ufuzzy),
-      lunr: searchLunr(ds, q, configs.lunr),
+    const run: Record<EngineKey, () => SearchResult> = {
+      seaq: () => searchSeaq(ds, q, configs.seaq),
+      seaqv1: () => searchSeaqV1(ds, q, configs.seaqv1),
+      fuse: () => searchFuse(ds, q, configs.fuse),
+      minisearch: () => searchMiniSearch(ds, q, configs.minisearch),
+      ufuzzy: () => searchUFuzzy(ds, q, configs.ufuzzy),
+      lunr: () => searchLunr(ds, q, configs.lunr),
     };
-  }, [query, ds, configs]);
+
+    const out = { ...empty };
+    for (const engine of engineOrder) {
+      if (isActive(engine)) out[engine] = run[engine]();
+    }
+    return out;
+  }, [query, ds, configs, isActive]);
 
   return (
     <div className="mx-auto min-h-screen max-w-[100rem] bg-white px-4 py-8 dark:bg-gray-900">
@@ -257,6 +286,9 @@ export function App() {
             result={results[engine]}
             config={configs[engine]}
             onConfigChange={(patch) => updateConfig(engine, patch)}
+            toggle={toggles[engine]}
+            onToggle={(patch) => setToggle(engine, patch)}
+            active={isActive(engine)}
           />
         ))}
       </div>
