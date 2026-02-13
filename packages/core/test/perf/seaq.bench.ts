@@ -4,7 +4,7 @@ import { seaq } from '../../src/index';
 import { seaq as seaqV1 } from '../../../../node_modules/seaq/dist/seaq.esm.js';
 import { CONSECUTIVE_COUNT, data } from './common';
 
-const { Books, ManyContacts } = data;
+const { Books, ManyContacts, Cities } = data;
 
 // Simple string array for no-keys testing
 const stringArray = ManyContacts.map((c) => `${c.givenName} ${c.familyName}`);
@@ -116,5 +116,44 @@ describe('seaq - top 10 results (slice vs limit)', () => {
   bench('10,000-contacts - limit: 10 [optimized]', () => {
     seaq(ManyContacts, 'na', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0, limit: 10 });
   });
+});
 
+describe('seaq v1 vs v2 - 20K cities (2 keys: name, state)', () => {
+  const cityKeys = ['name', 'state'] as const;
+
+  bench('v1 (published) - "san"', () => {
+    seaqV1(Cities, 'san', cityKeys);
+  });
+
+  bench('v2 joined - "san"', () => {
+    seaq(Cities, 'san', { keys: [...cityKeys], fieldMode: 'joined', fuzziness: 0 });
+  });
+
+  bench('v2 separate - "san"', () => {
+    seaq(Cities, 'san', { keys: [...cityKeys], fieldMode: 'separate', fuzziness: 0 });
+  });
+
+  bench('v1 (published) - "new york"', () => {
+    seaqV1(Cities, 'new york', cityKeys);
+  });
+
+  bench('v2 joined - "new york"', () => {
+    seaq(Cities, 'new york', { keys: [...cityKeys], fieldMode: 'joined', fuzziness: 0 });
+  });
+
+  bench('v2 separate - "new york"', () => {
+    seaq(Cities, 'new york', { keys: [...cityKeys], fieldMode: 'separate', fuzziness: 0 });
+  });
+
+  bench('v1 (published) - "los ang"', () => {
+    seaqV1(Cities, 'los ang', cityKeys);
+  });
+
+  bench('v2 joined - "los ang"', () => {
+    seaq(Cities, 'los ang', { keys: [...cityKeys], fieldMode: 'joined', fuzziness: 0 });
+  });
+
+  bench('v2 separate - "los ang"', () => {
+    seaq(Cities, 'los ang', { keys: [...cityKeys], fieldMode: 'separate', fuzziness: 0 });
+  });
 });
