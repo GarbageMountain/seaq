@@ -1,264 +1,332 @@
-# Seaq Benchmarks Deep Dive
+# Seaq Benchmarks
 
-This document provides detailed benchmark comparisons between seaq and other popular fuzzy search libraries: Fuse.js, MiniSearch, uFuzzy, and Lunr.
+All numbers in this document come from a single `yarn workspace seaq vitest bench` run. Nothing is estimated or rounded for narrative purposes.
 
-> **Snapshot date:** 2026-02-09
-> **Scoring version:** quadratic miss degradation + token-aware separate mode + 30/70 formula + threshold 0.3 + limit 10
+> **Snapshot date:** 2026-02-14
+> **Node.js:** v22.13.1 (Apple Silicon)
+> **Vitest:** v4.0.16
+
+See [README.md](./README.md) for API documentation.
+
+---
 
 ## TL;DR
 
-- **seaq v2** is **12% faster** than v1 in joined mode, **40% slower** in separate mode (due to token scoring on multi-word queries)
-- **seaq** is 14x faster than Fuse.js on cold-start searches
-- **seaq** excels at cold-start scenarios, nested data, acronym matching, and **cross-field multi-word search** (new)
-- **uFuzzy** is ~9x faster than seaq on cold-start but only works with flat string arrays
-- **MiniSearch/Lunr** are 2700x+ faster for repeated searches on static, pre-indexed data
-- **Fuse.js** is flexible but slowest across the board
+- **seaq v2 separate** is 44% faster than v1 on 10K contacts (`631 vs 438 ops/s`); joined mode is 15% faster (`505 vs 438 ops/s`).
+- On 20K cities, v2 separate is 58-77% faster than v1 depending on query.
+- **Cold start** (no pre-built index): seaq is 8.5x faster than Fuse.js, 3.4x faster than MiniSearch, 23x faster than Lunr. uFuzzy is 3.6x faster than seaq.
+- **Pre-built index** (repeated search on static data): MiniSearch and Lunr are 2,000-3,000x faster than seaq. This is the expected tradeoff -- seaq does not build an index.
+- **Nested data cold start**: seaq is 6-8x faster than both MiniSearch and Fuse.js because it needs no data flattening or index build.
+- **includeMatches** adds negligible overhead (under 4%).
+- **`limit: 10` vs `.slice(0, 10)`**: effectively identical performance.
+
+---
 
 ## Test Environment
 
-- Node.js 22
-- Vitest benchmarks
-- Dataset: 10K generated contacts with nested emails, addresses, and company info
-- Defaults: `fuzziness: 0.2`, `fieldMode: 'separate'`, `limit: 10`, `threshold: 0.3`
-- Benchmark queries use `fuzziness: 0` for consistent measurement
+- **Datasets:**
+  - 23 books from `@seaq/test-data/books.json` (classic Fuse.js test set)
+  - 10,000 contacts from `@seaq/test-data/contacts-10k.json` (seeded PRNG, realistic names)
+  - 20,000 cities from `@seaq/test-data/cities.json` (real-world US cities)
+  - 1K and 5K synthetic nested contacts (generated in `nested-arrays.bench.ts`)
+- **Current defaults:** `fuzziness: 0.2`, `fieldMode: 'joined'`, `limit: 10`, `threshold: 0.3`
+- **Benchmark settings:** Most benchmarks use `fuzziness: 0` for consistent measurement. The multi-word regression tests use `fuzziness: 0.2` to measure fuzzy overhead. The `realworld.bench.ts` tests use default options (including `fuzziness: 0.2`).
 
 ---
 
-## v1 vs v2 Performance
+## v1 vs v2: 10K Contacts
 
-Comparing the published seaq v1 (1.1.5) against v2 on identical datasets. Query: `"nath fe"` (multi-word, 2 fields).
+Query: `"nath fe"`, keys: `['givenName', 'familyName']`, fuzziness: 0.
 
-| | v1 (1.1.5) | v2 (joined) | v2 (separate) |
-|---|---|---|---|
-| **10K contacts** | 486 ops/s | 547 ops/s (+12%) | 293 ops/s (-40%) |
+| Variant | ops/s | mean (ms) | vs v1 |
+|---------|------:|----------:|------:|
+| v1 (published 1.1.5) | 438 | 2.28 | -- |
+| v2 (joined) | 505 | 1.98 | +15% |
+| v2 (separate) | 632 | 1.58 | +44% |
 
-- **Joined mode** is a drop-in replacement — same behavior, ~12% faster from pre-lowercasing and primitive optimizations
-- **Separate mode** is slower on multi-word queries due to token-aware scoring (2 tokens × 2 fields = 4 extra `string_score` calls per item). Single-word queries are unaffected (~487 ops/s, on par with v1).
-- **Separate mode now supports cross-field matching**: `"helen green"` finds `{ givenName: "Helen", familyName: "Green" }` — previously returned nothing.
+Both v2 modes are faster than v1. Separate mode is fastest on this query because the bitmask pre-filter rejects non-matching items before any per-token scoring.
 
----
+## v1 vs v2: 20K Cities
 
-## Performance Summary (10K items)
+Keys: `['name', 'state']`, fuzziness: 0.
 
-### Single Search (no pre-built index)
+| Query | v1 (ops/s) | v2 joined (ops/s) | v2 separate (ops/s) | v2 sep vs v1 |
+|-------|----------:|-----------------:|-------------------:|-------------:|
+| `"san"` | 194 | 263 | 306 | +58% |
+| `"new york"` | 205 | 277 | 343 | +67% |
+| `"los ang"` | 218 | 275 | 329 | +51% |
 
-| Library | 10K Books | 10K Contacts | Mean Time |
-|---------|-----------|--------------|-----------|
-| uFuzzy | 182,380 ops/s | 4,598 ops/s | 0.005-0.2ms |
-| **seaq (separate mode)** | **180,094 ops/s** | **287 ops/s** | **0.006-3.5ms** |
-| **seaq (joined mode)** | **155,193 ops/s** | **539 ops/s** | **0.006-1.9ms** |
-| MiniSearch | 39,452 ops/s | 93 ops/s | 0.03-11ms |
-| Fuse.js | 38,712 ops/s | 38 ops/s | 0.03-26ms |
-
-**Note on separate mode**: The 10K contacts benchmark uses `"nath fe"` (multi-word), which triggers token scoring. Single-word queries in separate mode run at ~487 ops/s. The 23-books benchmark uses a single-word query and shows separate mode faster than joined.
-
-**seaq is ~14x faster than Fuse.js** on 10K contact searches (joined mode).
-
-### 10 Consecutive Searches
-
-| Library | 10K Books | 10K Contacts |
-|---------|-----------|--------------|
-| uFuzzy | 65,874 ops/s | 476 ops/s |
-| MiniSearch | 32,101 ops/s | 97 ops/s |
-| **seaq (joined)** | **15,627 ops/s** | **54 ops/s** |
-| Lunr | 5,220 ops/s | 33 ops/s |
-| Fuse.js | 5,218 ops/s | 4.4 ops/s |
-
-### Key Takeaways
-
-- **seaq is ~14x faster than Fuse.js** on cold-start searches
-- **seaq is ~4x faster than MiniSearch** when index build time is included
-- **uFuzzy is ~9x faster than seaq** on cold-start but lacks nested object support and acronym matching
-- **Multi-word queries in separate mode cost ~2.75x** vs single-word (token scoring overhead)
-- **seaq's `limit` option** uses O(n log k) heap selection — same speed as `.slice()` on small limits
+Across all three queries, v2 separate is the fastest mode and v2 joined sits in between.
 
 ---
 
-## Quality Metrics
+## Single Search Performance by Library
 
-Testing precision (did we avoid junk results?), recall (did we find everything?), and ranking quality.
+These benchmarks include index build time. For seaq and uFuzzy, there is no index to build. For Fuse.js, MiniSearch, and Lunr, index construction happens inside each iteration.
 
-### Overall Quality Summary
+### 23 Books
 
-| Library | Precision | Recall | MRR | Top-1 Correct |
-|---------|-----------|--------|-----|---------------|
-| **seaq** | **84%** | 94% | **1.00** | **7/7** |
-| ufuzzy | 86% | 83% | 0.86 | 6/7 |
-| fuse.js | 74% | 100% | 1.00 | 7/7 |
-| minisearch | 62% | 83% | 0.86 | 6/7 |
-| seaq (fuzzy mode) | 26% | 100% | 1.00 | 7/7 |
+| Library | ops/s | mean (ms) |
+|---------|------:|----------:|
+| seaq (separate) | 163,205 | 0.006 |
+| seaq (joined) | 155,134 | 0.006 |
+| uFuzzy | 151,333 | 0.007 |
+| MiniSearch | 39,925 | 0.025 |
+| Fuse.js | 37,068 | 0.027 |
+| Lunr | 5,112 | 0.196 |
 
-**Key findings:**
-- seaq has the best precision/recall balance in default mode
-- seaq's fuzzy mode prioritizes recall (finds everything) at the cost of precision
-- MiniSearch struggles with typos ("Jonh" → "John" fails)
-- uFuzzy has high precision but misses some partial matches
+On a tiny dataset, seaq and uFuzzy are neck-and-neck. Index-based libraries pay their build cost every call, making them 4x slower.
 
----
+### 10K Contacts
 
-## Acronym Matching
+| Library | ops/s | mean (ms) |
+|---------|------:|----------:|
+| uFuzzy | 4,914 | 0.20 |
+| seaq (separate) | 649 | 1.54 |
+| seaq (joined) | 521 | 1.92 |
+| MiniSearch | 93 | 10.79 |
+| Fuse.js | 37 | 27.32 |
+| Lunr | 34 | 29.82 |
 
-Testing queries like "NYC" → "New York City", "API" → "Application Programming Interface".
+seaq is 5.6x faster than MiniSearch and 8.5x faster than Fuse.js in cold-start scenarios. uFuzzy is ~7.6x faster than seaq but requires pre-flattened string arrays.
 
-### Acronym Detection Rate
+### No-Keys Mode (10K items)
 
-| Library | Found | Top-1 Correct | Top-3 Correct | Detection Rate |
-|---------|-------|---------------|---------------|----------------|
-| **seaq** | **14/14** | **14** | **14** | **100%** |
-| fuse.js | 8/14 | 2 | 7 | 57% |
-| minisearch | 0/14 | 0 | 0 | 0% |
-| ufuzzy | 0/14 | 0 | 0 | 0% |
+When searching without specifying keys, seaq auto-detects searchable fields.
 
-**Key findings:**
-- seaq is the ONLY library with reliable acronym matching
-- Fuse.js sometimes finds acronyms but ranks them poorly (e.g., "himalayas" before "Hillsdale Michigan" for "HiMi")
-- MiniSearch and uFuzzy have zero acronym support - they need consecutive characters
+| Mode | ops/s | mean (ms) |
+|------|------:|----------:|
+| String array (10K pre-joined strings) | 1,567 | 0.64 |
+| Object array (10K contacts, all fields) | 163 | 6.14 |
 
-### Example: "HiMi" query
-
-```
-seaq:       1. Hillsdale Michigan  2. High Mountain
-fuse.js:    1. himalayas           2. Hillsdale Michigan
-minisearch: (no results)
-ufuzzy:     (no results)
-```
+Searching a plain string array is ~9.6x faster than auto-scanning all object fields.
 
 ---
 
-## Nested Object & Array Performance
+## 10 Consecutive Searches
 
-seaq can natively search nested properties like `company.name` and arrays like `emails.address`. Other libraries require data flattening.
+Each iteration builds the index (or not) then searches 10 times. This models a component that re-runs search on every keystroke but keeps its index alive across calls.
 
-### Cold Start (includes data prep/flattening)
-
-| Library | 1K contacts | 5K contacts |
-|---------|-------------|-------------|
-| **seaq (no prep)** | **1,769 ops/s** | **344 ops/s** |
-| minisearch (flatten + index) | 373 ops/s | 66 ops/s |
-| fuse.js (index build) | 276 ops/s | 54 ops/s |
-
-**seaq is 5-6x faster** when you need to search nested data immediately.
-
-### Pre-indexed Search (data already flattened)
-
-| Library | 1K contacts | 5K contacts |
-|---------|-------------|-------------|
-| minisearch | 27,415 ops/s | 5,670 ops/s |
-| seaq | 4,853 ops/s | 981 ops/s |
-| fuse.js | 339 ops/s | 65 ops/s |
-
-MiniSearch is faster IF you can pre-flatten your data and build an index ahead of time.
-
-### Array Field Traversal
-
-Searching `emails.address` where each contact has multiple email objects:
-
-| Library | 1K (search only) | 5K (search only) |
-|---------|------------------|------------------|
-| minisearch (pre-flattened) | 3,463 ops/s | 594 ops/s |
-| **seaq (native)** | **2,614 ops/s** | **494 ops/s** |
-| fuse.js | 312 ops/s | 57 ops/s |
-
-seaq is competitive even without flattening, and much simpler to use.
-
----
-
-## General Performance (10K items)
-
-### Search Only (index pre-built)
-
-| Library | Short "na" | Medium "nath fe" | Long "natasha okeefe" |
-|---------|------------|------------------|----------------------|
-| MiniSearch | 1,240,459 ops/s | 714,488 ops/s | 693,276 ops/s |
-| Lunr | 1,093,943 ops/s | 465,018 ops/s | 428,509 ops/s |
-| uFuzzy | 1,280 ops/s | 4,949 ops/s | 5,651 ops/s |
-| **seaq** | **453 ops/s** | **150 ops/s** | **106 ops/s** |
-| Fuse.js | 110 ops/s | 45 ops/s | 17 ops/s |
-
-With pre-built indexes, MiniSearch and Lunr are ~2700x+ faster than seaq.
-
-Note: seaq's medium/long query numbers include token-scoring overhead (multi-word queries trigger `tokens × fields` extra scoring calls). Short single-word queries are fastest.
-
-### seaq Performance Options
-
-| Mode | 10K Books | 10K Contacts | Trade-off |
-|------|-----------|--------------|-----------|
-| `fieldMode: 'joined'` | 155,193 ops/s | 539 ops/s | Full cross-field matching, no token overhead |
-| `fieldMode: 'separate'` (default) | 180,094 ops/s | 287 ops/s | Cross-field via token scoring, ~2.75x slower on multi-word |
-| `limit: 10` vs `.slice(0,10)` | — | 521 vs 520 ops/s | Equivalent |
-
-### Simulated Typing (7 keystrokes: n→na→nat→...→natasha)
+### 23 Books
 
 | Library | ops/s |
-|---------|-------|
-| MiniSearch | 176,681 |
-| Lunr | 122,616 |
-| uFuzzy | 452 |
-| seaq | 57 |
-| Fuse.js | 11 |
+|---------|------:|
+| uFuzzy | 59,294 |
+| MiniSearch | 32,127 |
+| seaq (joined) | 15,602 |
+| Fuse.js | 5,052 |
+| Lunr | 5,100 |
 
-For live-as-you-type search with pre-built indexes, MiniSearch dominates.
+### 10K Contacts
+
+| Library | ops/s |
+|---------|------:|
+| uFuzzy | 496 |
+| MiniSearch | 94 |
+| seaq (joined) | 51 |
+| Lunr | 33 |
+| Fuse.js | 4.3 |
+
+seaq is 12x faster than Fuse.js. MiniSearch amortizes its index build well and pulls ahead at this scale.
 
 ---
 
-## When to Use Each Library
+## Pre-Built Index: Search Only (10K Contacts)
 
-### Use seaq when:
-- You need acronym matching (NYC → New York City)
-- Your data has nested objects or arrays
-- Data changes frequently (no index to rebuild)
-- Cold-start performance matters
-- You want cross-field multi-word search ("helen green" across firstName + lastName) without joined mode
-- You want zero setup complexity
+For libraries that support it, the index is built once upfront. seaq and uFuzzy re-scan every call (that is how they work). This measures pure search throughput.
 
-### Use MiniSearch when:
-- You have large static datasets (10K+ items)
-- You can pre-flatten nested data
-- You need maximum search-only speed
-- Building an index upfront is acceptable
+| Query | seaq | Fuse.js | uFuzzy | MiniSearch | Lunr |
+|-------|-----:|--------:|-------:|-----------:|-----:|
+| `"na"` (short) | 410 | 105 | 1,273 | 1,222,614 | 1,076,771 |
+| `"nath fe"` (medium) | 327 | 44 | 4,545 | 714,982 | 487,189 |
+| `"natasha okeefe"` (long) | 270 | 17 | 5,579 | 673,541 | 426,716 |
 
-### Use uFuzzy when:
-- You only search flat string arrays
-- You need the absolute fastest cold-start
-- You don't need acronym matching
-- Data structure is simple
+All values are ops/s. MiniSearch and Lunr are 2,000-2,500x faster than seaq when the index is pre-built. This is the scenario where seaq should not be used. If your data is large and static, use an indexed library.
 
-### Use Fuse.js when:
-- You need maximum fuzzy tolerance
-- You want built-in nested object support
-- Speed is not critical
-- You need the most flexible configuration
+### Simulated Typing (7 keystrokes: n -> na -> ... -> natasha)
 
-### Use Lunr when:
-- You want a traditional full-text search experience
-- You need stemming and stop words
-- You have document-like data
+| Library | ops/s |
+|---------|------:|
+| MiniSearch | 169,298 |
+| Lunr | 119,308 |
+| uFuzzy | 444 |
+| seaq | 55 |
+| Fuse.js | 11 |
+
+Each iteration runs 7 searches. MiniSearch is 3,078x faster than seaq for live-as-you-type on pre-indexed data.
+
+---
+
+## Cold Start: Build + Search (10K Contacts)
+
+This is the realistic first-search scenario: user loads a page with 10K items and immediately types a query. Index-based libraries must build their index first.
+
+Query: `"nath fe"`, keys: `['givenName', 'familyName']`.
+
+| Library | ops/s | mean (ms) | vs seaq |
+|---------|------:|----------:|--------:|
+| uFuzzy | 1,157 | 0.86 | 3.6x faster |
+| **seaq** | **325** | **3.08** | **--** |
+| MiniSearch | 95 | 10.53 | 3.4x slower |
+| Fuse.js | 38 | 26.16 | 8.5x slower |
+| Lunr | 14 | 71.49 | 23.2x slower |
+
+---
+
+## Performance by Mode (Joined vs Separate)
+
+Query: `"nath fe"`, 10K contacts, fuzziness: 0.
+
+| Mode | ops/s | mean (ms) |
+|------|------:|----------:|
+| Separate | 649 | 1.54 |
+| Joined | 521 | 1.92 |
+
+On 23 books:
+
+| Mode | ops/s |
+|------|------:|
+| Separate | 163,205 |
+| Joined | 155,134 |
+
+Separate mode is faster than joined in these benchmarks because the bitmask pre-filter eliminates non-matching items early. The advantage of joined mode is simpler cross-field matching semantics, not raw speed.
+
+---
+
+## includeMatches Overhead
+
+10K contacts, `"nath fe"`, fuzziness: 0.
+
+### Joined Mode
+
+| includeMatches | ops/s | mean (ms) |
+|----------------|------:|----------:|
+| false | 521 | 1.92 |
+| true | 501 | 2.00 |
+
+**Overhead: ~4%.**
+
+### Separate Mode
+
+| includeMatches | ops/s | mean (ms) |
+|----------------|------:|----------:|
+| false | 632 | 1.58 |
+| true | 651 | 1.54 |
+
+**No measurable overhead.** The difference is within noise (1.03x, and in this run `includeMatches: true` was marginally faster).
+
+---
+
+## Limit Optimization: Built-in `limit` vs `.slice()`
+
+10K contacts, query `"na"`, joined mode, fuzziness: 0.
+
+| Approach | ops/s | mean (ms) |
+|----------|------:|----------:|
+| `.slice(0, 10)` | 482 | 2.07 |
+| `limit: 10` | 495 | 2.02 |
+
+**Effectively identical** (1.03x). The built-in `limit` uses an O(n log k) heap, which matches `.slice()` performance on small limits. The benefit of `limit` is that it avoids allocating the full sorted array.
+
+---
+
+## Multi-Word Query Performance (Separate Mode)
+
+10K contacts, separate mode. Compares strict vs fuzzy and single-word vs multi-word.
+
+| Query | Fuzziness | ops/s | mean (ms) |
+|-------|----------:|------:|----------:|
+| `"nath"` (1 word) | 0.2 | 306 | 3.27 |
+| `"nath fe"` (2 words) | 0.2 | 236 | 4.24 |
+| `"natasha okeefe"` (2 words, long) | 0.2 | 191 | 5.25 |
+| `"nath fe"` (2 words) | 0 | 623 | 1.61 |
+
+Key observations:
+- **Fuzziness costs ~2x**: strict `"nath fe"` at 623 ops/s vs fuzzy `"nath fe"` at 236 ops/s.
+- **Multi-word costs ~1.3x** vs single-word at the same fuzziness (306 -> 236 ops/s).
+- **Longer queries cost more**: `"natasha okeefe"` at 191 ops/s vs `"nath fe"` at 236 ops/s (longer strings = more character comparisons).
+
+---
+
+## Nested Object and Array Performance
+
+seaq natively traverses nested properties (`company.name`) and arrays (`emails.address`). Other libraries require pre-flattening the data.
+
+### Nested Property Search: `company.name` (search-only, index pre-built)
+
+| Library | 1K contacts (ops/s) | 5K contacts (ops/s) |
+|---------|--------------------:|--------------------:|
+| MiniSearch (pre-flattened) | 27,012 | 5,484 |
+| seaq (native nested) | 4,211 | 809 |
+| Fuse.js (native nested) | 338 | 65 |
+
+MiniSearch is 6-7x faster when the data is already flattened and indexed.
+
+### Array Field Search: `emails.address` (search-only, index pre-built)
+
+| Library | 1K contacts (ops/s) | 5K contacts (ops/s) |
+|---------|--------------------:|--------------------:|
+| MiniSearch (pre-flattened) | 3,430 | 568 |
+| seaq (native array traversal) | 3,133 | 597 |
+| Fuse.js (native array) | 299 | 57 |
+
+seaq and MiniSearch are nearly identical on array fields. At 5K, seaq is marginally faster (1.05x). At 1K, MiniSearch is marginally faster (1.09x). Both are 10x faster than Fuse.js.
+
+### Deep Nested: `addresses.city` (1K contacts, cold start for Fuse.js)
+
+| Library | ops/s |
+|---------|------:|
+| MiniSearch (pre-flattened) | 7,021 |
+| seaq (native) | 2,857 |
+| Fuse.js (native) | 305 |
+
+### Cold Start with Nested Data (includes flattening + index build)
+
+| Library | 1K contacts (ops/s) | 5K contacts (ops/s) |
+|---------|--------------------:|--------------------:|
+| **seaq (no prep needed)** | **2,197** | **413** |
+| MiniSearch (flatten + index) | 362 | 62 |
+| Fuse.js (index build) | 269 | 53 |
+
+**seaq is 6x faster than MiniSearch and 8x faster than Fuse.js** on cold start with nested data. No flattening step, no index build.
+
+### Multi-Field Nested Search (1K contacts)
+
+Searching across `name`, `company.name`, and `addresses.city` with query `"John Acme"`:
+
+| Library | ops/s | mean (ms) |
+|---------|------:|----------:|
+| seaq | 1,662 | 0.60 |
+| Fuse.js | 117 | 8.52 |
+
+seaq is 14x faster than Fuse.js on multi-field nested search.
 
 ---
 
 ## Running Benchmarks
 
 ```bash
-# All benchmarks
+# All benchmarks (takes 2-3 minutes)
 yarn workspace seaq vitest bench
 
-# Quality tests
-yarn workspace seaq vitest run test/perf/quality-metrics.test.ts
-yarn workspace seaq vitest run test/perf/acronym-quality.test.ts
-
-# Specific benchmarks
+# Individual benchmark files
+yarn workspace seaq vitest bench test/perf/seaq.bench.ts
 yarn workspace seaq vitest bench test/perf/realworld.bench.ts
 yarn workspace seaq vitest bench test/perf/nested-arrays.bench.ts
+
+# Individual library benchmarks
+yarn workspace seaq vitest bench test/perf/fuse.bench.ts
+yarn workspace seaq vitest bench test/perf/minisearch.bench.ts
+yarn workspace seaq vitest bench test/perf/lunr.bench.ts
+yarn workspace seaq vitest bench test/perf/ufuzzy.bench.ts
 ```
 
 ---
 
 ## Methodology Notes
 
-1. **Precision** = (relevant results returned) / (total results returned)
-2. **Recall** = (relevant results returned) / (total relevant results)
-3. **MRR** (Mean Reciprocal Rank) = average of 1/rank of first correct result
-4. **Cold start** = includes index building / data prep time
-5. **Search only** = index pre-built, measures pure search speed
-
-All benchmarks use Vitest's built-in benchmarking with multiple iterations for statistical significance.
+1. All benchmarks use Vitest's built-in benchmarking with warmup and multiple iterations for statistical significance.
+2. **Cold start** = index build (if any) + search, measured per iteration.
+3. **Search only** = index pre-built outside the benchmark loop, measures pure search throughput.
+4. **Single search** benchmarks for Fuse.js, MiniSearch, and Lunr include index construction inside each iteration (cold-start behavior). seaq and uFuzzy have no index.
+5. Numbers will vary by machine. Relative comparisons are more meaningful than absolute ops/s.
