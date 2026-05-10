@@ -1171,8 +1171,6 @@ __metadata:
 "@seaq/test-data@workspace:*, @seaq/test-data@workspace:packages/test-data":
   version: 0.0.0-use.local
   resolution: "@seaq/test-data@workspace:packages/test-data"
-  dependencies:
-    tsup: "npm:^8.5.1"
   languageName: unknown
   linkType: soft
 

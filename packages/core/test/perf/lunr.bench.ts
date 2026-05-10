@@ -10,12 +10,12 @@ describe('lunr - single search', () => {
       this.field('title');
       this.field('author');
 
-      Books.forEach((book) => {
+      for (const book of Books) {
         this.add({
           title: book.title,
           author: book.author,
         });
-      });
+      }
     });
 
     search.search('hi');
@@ -26,12 +26,12 @@ describe('lunr - single search', () => {
       this.field('givenName');
       this.field('familyName');
 
-      ManyContacts.forEach((contact) => {
+      for (const contact of ManyContacts) {
         this.add({
           givenName: contact.givenName,
           familyName: contact.familyName,
         });
-      });
+      }
     });
 
     search.search('nath fe');
@@ -44,12 +44,12 @@ describe(`lunr - ${CONSECUTIVE_COUNT} consecutive searches`, () => {
       this.field('title');
       this.field('author');
 
-      Books.forEach((book) => {
+      for (const book of Books) {
         this.add({
           title: book.title,
           author: book.author,
         });
-      });
+      }
     });
 
     for (let index = 0; index < CONSECUTIVE_COUNT; index++) {
@@ -62,12 +62,12 @@ describe(`lunr - ${CONSECUTIVE_COUNT} consecutive searches`, () => {
       this.field('givenName');
       this.field('familyName');
 
-      ManyContacts.forEach((contact) => {
+      for (const contact of ManyContacts) {
         this.add({
           givenName: contact.givenName,
           familyName: contact.familyName,
         });
-      });
+      }
     });
 
     for (let index = 0; index < CONSECUTIVE_COUNT; index++) {

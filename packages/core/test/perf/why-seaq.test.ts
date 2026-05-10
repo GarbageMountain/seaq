@@ -6,14 +6,16 @@
  *
  * Run with: yarn workspace seaq vitest run test/perf/why-seaq.test.ts
  */
-import Fuse from 'fuse.js';
-import MiniSearch from 'minisearch';
+
 import uFuzzy from '@leeoniya/ufuzzy';
+import type { Contact } from '@seaq/test-data';
+import Fuse from 'fuse.js';
 import lunr from 'lunr';
+import MiniSearch from 'minisearch';
 import { describe, expect, test } from 'vitest';
-import { seaq } from '../../src/index';
 // @ts-expect-error - direct import from node_modules to avoid workspace resolution
 import { seaq as seaqV1 } from '../../../../node_modules/seaq/dist/seaq.esm.js';
+import { seaq } from '../../src/index';
 import { data } from './common';
 
 const { ManyContacts, Cities } = data;
@@ -232,8 +234,7 @@ describe('SCENARIO 2: Acronym matching', () => {
       { name: 'seaq', search: (q: string) => seaq(techTerms, q) },
       {
         name: 'fuse.js',
-        search: (q: string) =>
-          new Fuse(techTerms, { threshold: 0.6 }).search(q).map((r) => r.item),
+        search: (q: string) => new Fuse(techTerms, { threshold: 0.6 }).search(q).map((r) => r.item),
       },
       {
         name: 'minisearch',
@@ -280,7 +281,7 @@ describe('SCENARIO 2: Acronym matching', () => {
       `\n  Score:  ${libs.map((l) => `${l.name}: ${scores[l.name] ?? 0}/${acronymQueries.length}`).join('  |  ')}`,
     );
 
-    expect(scores['seaq']).toBeGreaterThanOrEqual(4);
+    expect(scores.seaq).toBeGreaterThanOrEqual(4);
   });
 });
 
@@ -291,7 +292,7 @@ describe('SCENARIO 2: Acronym matching', () => {
 describe('SCENARIO 3: Cold start (no index, data just arrived)', () => {
   test('10K contacts — "nath"', { timeout: 60_000 }, () => {
     const rows: Row[] = [];
-    const contactName = (c: any) => `${c.givenName} ${c.familyName}`;
+    const contactName = (c: Contact) => `${c.givenName} ${c.familyName}`;
 
     const { ms: seaqMs, result: seaqR } = sampled(() =>
       seaq(ManyContacts, 'nath', { keys: ['givenName', 'familyName'] }),
@@ -335,9 +336,10 @@ describe('SCENARIO 3: Cold start (no index, data just arrived)', () => {
       const idx = lunr(function () {
         this.field('givenName');
         this.field('familyName');
-        ManyContacts.forEach((c, i) =>
-          this.add({ id: i, givenName: c.givenName, familyName: c.familyName }),
-        );
+        for (let i = 0; i < ManyContacts.length; i++) {
+          const c = ManyContacts[i];
+          this.add({ id: i, givenName: c.givenName, familyName: c.familyName });
+        }
       });
       return idx.search('nath*').slice(0, 10);
     });
@@ -351,14 +353,14 @@ describe('SCENARIO 3: Cold start (no index, data just arrived)', () => {
     const { ms: ufMs, result: ufR } = sampled(() => {
       const uf = new uFuzzy();
       const [idxs, , order] = uf.search(contactHaystack, 'nath');
-      const sorted = order ? order.map((oi) => idxs![oi]) : (idxs ?? []);
+      const sorted = order ? order.map((oi) => idxs?.[oi]) : (idxs ?? []);
       return sorted.slice(0, 10);
     });
     rows.push({
       lib: 'ufuzzy',
       ms: ufMs,
       count: ufR.length,
-      top3: ufR.slice(0, 3).map((i: any) => contactName(ManyContacts[i])),
+      top3: ufR.slice(0, 3).map((i) => (i !== undefined ? contactName(ManyContacts[i]) : '')),
     });
 
     printTable('10K contacts, cold start for "nath"', rows);
@@ -371,26 +373,44 @@ describe('SCENARIO 3: Cold start (no index, data just arrived)', () => {
     const { ms: seaqMs, result: seaqR } = sampled(() =>
       seaq(Cities, 'san', { keys: ['name', 'state'] }),
     );
-    rows.push({ lib: 'seaq', ms: seaqMs, count: seaqR.length, top3: seaqR.slice(0, 3).map((c: any) => c.name) });
+    rows.push({
+      lib: 'seaq',
+      ms: seaqMs,
+      count: seaqR.length,
+      top3: seaqR.slice(0, 3).map((c) => c.name),
+    });
 
     const { ms: fuseMs, result: fuseR } = sampled(() => {
       const f = new Fuse(Cities, { keys: ['name', 'state'] });
       return f.search('san').slice(0, 10);
     });
-    rows.push({ lib: 'fuse.js', ms: fuseMs, count: fuseR.length, top3: fuseR.slice(0, 3).map((r) => r.item.name) });
+    rows.push({
+      lib: 'fuse.js',
+      ms: fuseMs,
+      count: fuseR.length,
+      top3: fuseR.slice(0, 3).map((r) => r.item.name),
+    });
 
     const { ms: miniMs, result: miniR } = sampled(() => {
       const ms = new MiniSearch({ fields: ['name', 'state'], storeFields: ['name'] });
       ms.addAll(Cities.map((c, i) => ({ id: i, name: c.name, state: c.state ?? '' })));
       return ms.search('san', { prefix: true }).slice(0, 10);
     });
-    rows.push({ lib: 'minisearch', ms: miniMs, count: miniR.length, top3: miniR.slice(0, 3).map((r) => r.name as string) });
+    rows.push({
+      lib: 'minisearch',
+      ms: miniMs,
+      count: miniR.length,
+      top3: miniR.slice(0, 3).map((r) => r.name as string),
+    });
 
     const { ms: lunrMs, result: lunrR } = sampled(() => {
       const idx = lunr(function () {
         this.field('name');
         this.field('state');
-        Cities.forEach((c, i) => this.add({ id: i, name: c.name, state: c.state ?? '' }));
+        for (let i = 0; i < Cities.length; i++) {
+          const c = Cities[i];
+          this.add({ id: i, name: c.name, state: c.state ?? '' });
+        }
       });
       return idx.search('san*').slice(0, 10);
     });
@@ -404,14 +424,14 @@ describe('SCENARIO 3: Cold start (no index, data just arrived)', () => {
     const { ms: ufMs, result: ufR } = sampled(() => {
       const uf = new uFuzzy();
       const [idxs, , order] = uf.search(cityHaystack, 'san');
-      const sorted = order ? order.map((oi) => idxs![oi]) : (idxs ?? []);
+      const sorted = order ? order.map((oi) => idxs?.[oi]) : (idxs ?? []);
       return sorted.slice(0, 10);
     });
     rows.push({
       lib: 'ufuzzy',
       ms: ufMs,
       count: ufR.length,
-      top3: ufR.slice(0, 3).map((i: any) => Cities[i].name),
+      top3: ufR.slice(0, 3).map((i) => (i !== undefined ? Cities[i].name : '')),
     });
 
     printTable('20K cities, cold start for "san"', rows);
@@ -433,13 +453,17 @@ describe('SCENARIO 4: Scaling without refactoring', () => {
   ];
 
   test('same seaq() call from 20 → 20K items', () => {
-    console.log(`\n  Scaling: seaq(cities, "san", { keys: ["name", "state"] }) (median of ${SAMPLES} runs)`);
+    console.log(
+      `\n  Scaling: seaq(cities, "san", { keys: ["name", "state"] }) (median of ${SAMPLES} runs)`,
+    );
     console.log(`  ${'Size'.padEnd(14)} ${'Time'.padStart(10)} ${'Results'.padStart(8)}`);
     console.log(`  ${'─'.repeat(14)} ${'─'.repeat(10)} ${'─'.repeat(8)}`);
 
     for (const { label, data: ds } of slices) {
       const { ms, result } = sampled(() => seaq(ds, 'san', { keys: ['name', 'state'] }));
-      console.log(`  ${label.padEnd(14)} ${fmt(ms).padStart(10)} ${String(result.length).padStart(8)}`);
+      console.log(
+        `  ${label.padEnd(14)} ${fmt(ms).padStart(10)} ${String(result.length).padStart(8)}`,
+      );
     }
 
     console.log('\n  ^ Same function call. No index to build, rebuild, or invalidate.');
@@ -461,14 +485,60 @@ describe('SCENARIO 5: Nested object search (zero prep)', () => {
   }
 
   const crmContacts: CrmContact[] = [
-    { name: 'Alice Chen', company: { name: 'Acme Corp', industry: 'SaaS' }, emails: [{ type: 'work', address: 'alice@acme.com' }], tags: ['vip', 'enterprise'] },
-    { name: 'Bob Martinez', company: { name: 'TechStart', industry: 'Fintech' }, emails: [{ type: 'work', address: 'bob@techstart.io' }, { type: 'personal', address: 'bobm@gmail.com' }], tags: ['lead'] },
-    { name: 'Carol Williams', company: { name: 'DataSystems', industry: 'Analytics' }, emails: [{ type: 'work', address: 'carol@datasys.com' }], tags: ['customer', 'enterprise'] },
-    { name: 'David Kim', company: { name: 'CloudNine', industry: 'Infrastructure' }, emails: [{ type: 'work', address: 'dkim@cloudnine.dev' }], tags: ['partner'] },
-    { name: 'Eva Johnson', company: { name: 'MegaInc', industry: 'E-commerce' }, emails: [{ type: 'work', address: 'eva.j@megainc.com' }, { type: 'personal', address: 'evaj@yahoo.com' }], tags: ['vip', 'customer'] },
-    { name: 'Frank Liu', company: { name: 'Acme Corp', industry: 'SaaS' }, emails: [{ type: 'work', address: 'frank@acme.com' }], tags: ['internal'] },
-    { name: 'Grace Park', company: { name: 'StartupCo', industry: 'HealthTech' }, emails: [{ type: 'work', address: 'grace@startupco.health' }], tags: ['prospect'] },
-    { name: 'Henry Zhang', company: { name: 'BigCorp', industry: 'Manufacturing' }, emails: [{ type: 'work', address: 'hzhang@bigcorp.com' }], tags: ['customer'] },
+    {
+      name: 'Alice Chen',
+      company: { name: 'Acme Corp', industry: 'SaaS' },
+      emails: [{ type: 'work', address: 'alice@acme.com' }],
+      tags: ['vip', 'enterprise'],
+    },
+    {
+      name: 'Bob Martinez',
+      company: { name: 'TechStart', industry: 'Fintech' },
+      emails: [
+        { type: 'work', address: 'bob@techstart.io' },
+        { type: 'personal', address: 'bobm@gmail.com' },
+      ],
+      tags: ['lead'],
+    },
+    {
+      name: 'Carol Williams',
+      company: { name: 'DataSystems', industry: 'Analytics' },
+      emails: [{ type: 'work', address: 'carol@datasys.com' }],
+      tags: ['customer', 'enterprise'],
+    },
+    {
+      name: 'David Kim',
+      company: { name: 'CloudNine', industry: 'Infrastructure' },
+      emails: [{ type: 'work', address: 'dkim@cloudnine.dev' }],
+      tags: ['partner'],
+    },
+    {
+      name: 'Eva Johnson',
+      company: { name: 'MegaInc', industry: 'E-commerce' },
+      emails: [
+        { type: 'work', address: 'eva.j@megainc.com' },
+        { type: 'personal', address: 'evaj@yahoo.com' },
+      ],
+      tags: ['vip', 'customer'],
+    },
+    {
+      name: 'Frank Liu',
+      company: { name: 'Acme Corp', industry: 'SaaS' },
+      emails: [{ type: 'work', address: 'frank@acme.com' }],
+      tags: ['internal'],
+    },
+    {
+      name: 'Grace Park',
+      company: { name: 'StartupCo', industry: 'HealthTech' },
+      emails: [{ type: 'work', address: 'grace@startupco.health' }],
+      tags: ['prospect'],
+    },
+    {
+      name: 'Henry Zhang',
+      company: { name: 'BigCorp', industry: 'Manufacturing' },
+      emails: [{ type: 'work', address: 'hzhang@bigcorp.com' }],
+      tags: ['customer'],
+    },
   ];
 
   test('search nested company.name and emails.address — no flattening needed', () => {
@@ -479,8 +549,12 @@ describe('SCENARIO 5: Nested object search (zero prep)', () => {
     console.log(`  seaq:       ${seaqR.map((c) => c.name).join(', ')} (${seaqR.length} results)`);
 
     // fuse — also supports nested keys natively
-    const fuseR = new Fuse(crmContacts, { keys: ['company.name', 'emails.address'] }).search('acme');
-    console.log(`  fuse.js:    ${fuseR.map((r) => r.item.name).join(', ')} (${fuseR.length} results)`);
+    const fuseR = new Fuse(crmContacts, { keys: ['company.name', 'emails.address'] }).search(
+      'acme',
+    );
+    console.log(
+      `  fuse.js:    ${fuseR.map((r) => r.item.name).join(', ')} (${fuseR.length} results)`,
+    );
 
     // minisearch — must flatten first
     const flatCrm = crmContacts.map((c, id) => ({
@@ -525,10 +599,14 @@ describe('SCENARIO 6: Dynamic data (index = wasted work)', () => {
     const rows: Row[] = [];
 
     const { ms: seaqMs } = sampled(() => {
-      for (const ds of datasets)
-        seaq(ds, 'john', { keys: ['givenName', 'familyName'] });
+      for (const ds of datasets) seaq(ds, 'john', { keys: ['givenName', 'familyName'] });
     });
-    rows.push({ lib: 'seaq', ms: seaqMs / datasets.length, count: datasets.length, top3: ['(avg per search)'] });
+    rows.push({
+      lib: 'seaq',
+      ms: seaqMs / datasets.length,
+      count: datasets.length,
+      top3: ['(avg per search)'],
+    });
 
     const { ms: fuseMs } = sampled(() => {
       for (const ds of datasets) {
@@ -536,7 +614,12 @@ describe('SCENARIO 6: Dynamic data (index = wasted work)', () => {
         f.search('john');
       }
     });
-    rows.push({ lib: 'fuse.js', ms: fuseMs / datasets.length, count: datasets.length, top3: ['(avg per search)'] });
+    rows.push({
+      lib: 'fuse.js',
+      ms: fuseMs / datasets.length,
+      count: datasets.length,
+      top3: ['(avg per search)'],
+    });
 
     const { ms: miniMs } = sampled(() => {
       for (const ds of datasets) {
@@ -545,7 +628,12 @@ describe('SCENARIO 6: Dynamic data (index = wasted work)', () => {
         m.search('john', { prefix: true });
       }
     });
-    rows.push({ lib: 'minisearch', ms: miniMs / datasets.length, count: datasets.length, top3: ['(avg per search)'] });
+    rows.push({
+      lib: 'minisearch',
+      ms: miniMs / datasets.length,
+      count: datasets.length,
+      top3: ['(avg per search)'],
+    });
 
     const { ms: ufMs } = sampled(() => {
       for (const ds of datasets) {
@@ -554,7 +642,12 @@ describe('SCENARIO 6: Dynamic data (index = wasted work)', () => {
         uf.search(hay, 'john');
       }
     });
-    rows.push({ lib: 'ufuzzy', ms: ufMs / datasets.length, count: datasets.length, top3: ['(avg per search)'] });
+    rows.push({
+      lib: 'ufuzzy',
+      ms: ufMs / datasets.length,
+      count: datasets.length,
+      top3: ['(avg per search)'],
+    });
 
     printTable('500 items, dataset changes each time (index = wasted work)', rows);
     console.log('\n  ^ When data changes between searches, index-based libraries pay the');
@@ -583,9 +676,10 @@ describe('SCENARIO 7: The tradeoff — repeated search on pre-indexed data', () 
   const lunrIdx = lunr(function () {
     this.field('givenName');
     this.field('familyName');
-    ManyContacts.forEach((c, i) =>
-      this.add({ id: i, givenName: c.givenName, familyName: c.familyName }),
-    );
+    for (let i = 0; i < ManyContacts.length; i++) {
+      const c = ManyContacts[i];
+      this.add({ id: i, givenName: c.givenName, familyName: c.familyName });
+    }
   });
 
   const ufInst = new uFuzzy();
@@ -600,7 +694,7 @@ describe('SCENARIO 7: The tradeoff — repeated search on pre-indexed data', () 
       lib: 'seaq',
       ms: seaqMs,
       count: seaqR.length,
-      top3: seaqR.slice(0, 3).map((c: any) => c.givenName),
+      top3: seaqR.slice(0, 3).map((c) => c.givenName),
     });
 
     const { ms: fuseMs, result: fuseR } = sampled(() => fuseIdx.search('nath'));
@@ -608,7 +702,7 @@ describe('SCENARIO 7: The tradeoff — repeated search on pre-indexed data', () 
       lib: 'fuse.js',
       ms: fuseMs,
       count: fuseR.length,
-      top3: fuseR.slice(0, 3).map((r) => (r.item as any).givenName),
+      top3: fuseR.slice(0, 3).map((r) => r.item.givenName),
     });
 
     const { ms: miniMs, result: miniR } = sampled(() => miniIdx.search('nath', { prefix: true }));
@@ -635,7 +729,7 @@ describe('SCENARIO 7: The tradeoff — repeated search on pre-indexed data', () 
       lib: 'ufuzzy',
       ms: ufMs,
       count: ufR.length,
-      top3: ufR.slice(0, 3).map((i: any) => ManyContacts[i].givenName),
+      top3: ufR.slice(0, 3).map((i) => (i !== undefined ? ManyContacts[i].givenName : '')),
     });
 
     printTable('10K contacts, INDEX PRE-BUILT, search "nath"', rows);
@@ -649,8 +743,7 @@ describe('SCENARIO 7: The tradeoff — repeated search on pre-indexed data', () 
     const rows: Row[] = [];
 
     const { ms: seaqMs } = sampled(() => {
-      for (const q of keystrokes)
-        seaq(ManyContacts, q, { keys: ['givenName', 'familyName'] });
+      for (const q of keystrokes) seaq(ManyContacts, q, { keys: ['givenName', 'familyName'] });
     });
     rows.push({ lib: 'seaq', ms: seaqMs, count: 7, top3: [`(${fmt(seaqMs / 7)}/keystroke)`] });
 
@@ -662,10 +755,15 @@ describe('SCENARIO 7: The tradeoff — repeated search on pre-indexed data', () 
     const { ms: miniMs } = sampled(() => {
       for (const q of keystrokes) miniIdx.search(q, { prefix: true });
     });
-    rows.push({ lib: 'minisearch', ms: miniMs, count: 7, top3: [`(${fmt(miniMs / 7)}/keystroke)`] });
+    rows.push({
+      lib: 'minisearch',
+      ms: miniMs,
+      count: 7,
+      top3: [`(${fmt(miniMs / 7)}/keystroke)`],
+    });
 
     const { ms: lunrMs } = sampled(() => {
-      for (const q of keystrokes) lunrIdx.search(q + '*');
+      for (const q of keystrokes) lunrIdx.search(`${q}*`);
     });
     rows.push({ lib: 'lunr', ms: lunrMs, count: 7, top3: [`(${fmt(lunrMs / 7)}/keystroke)`] });
 
@@ -690,7 +788,9 @@ describe('SCENARIO 8: seaq v1 → v2', () => {
     const queries = ['san', 'new york', 'los ang'];
     const cityKeys = ['name', 'state'];
 
-    console.log(`\n  Scoring engine: v1 vs v2 on 20K cities, fuzziness: 0 (median of ${SAMPLES} runs)`);
+    console.log(
+      `\n  Scoring engine: v1 vs v2 on 20K cities, fuzziness: 0 (median of ${SAMPLES} runs)`,
+    );
     console.log(
       `  ${'Query'.padEnd(14)} ${'v1 time'.padStart(10)} ${'v1 #'.padStart(6)} ${'v2 time'.padStart(10)} ${'v2 #'.padStart(6)} ${'speedup'.padStart(8)}`,
     );
@@ -718,7 +818,9 @@ describe('SCENARIO 8: seaq v1 → v2', () => {
     const queries = ['san', 'na', 'los ang'];
     const cityKeys = ['name', 'state'];
 
-    console.log(`\n  v1 sort+slice(10) vs v2 { limit: 10, threshold: 0.3 } — fuzz 0 (median of ${SAMPLES} runs)`);
+    console.log(
+      `\n  v1 sort+slice(10) vs v2 { limit: 10, threshold: 0.3 } — fuzz 0 (median of ${SAMPLES} runs)`,
+    );
     console.log(
       `  ${'Query'.padEnd(14)} ${'v1+slice'.padStart(10)} ${'v1 raw#'.padStart(8)} ${'v2 limit'.padStart(10)} ${'v2 #'.padStart(6)} ${'speedup'.padStart(8)}`,
     );

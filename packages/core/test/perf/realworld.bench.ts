@@ -5,10 +5,11 @@
  * For indexed libraries, index is pre-built (realistic for apps).
  * For seaq, it scans fresh each time (that's how it works).
  */
-import Fuse from 'fuse.js';
-import MiniSearch from 'minisearch';
+
 import uFuzzy from '@leeoniya/ufuzzy';
+import Fuse from 'fuse.js';
 import lunr from 'lunr';
+import MiniSearch from 'minisearch';
 import { bench, describe } from 'vitest';
 import { seaq } from '../../src/index';
 import { data } from './common';
@@ -25,7 +26,7 @@ const miniSearchIndex = new MiniSearch({
   storeFields: ['givenName', 'familyName'],
 });
 miniSearchIndex.addAll(
-  ManyContacts.map((c, i) => ({ id: i, givenName: c.givenName, familyName: c.familyName }))
+  ManyContacts.map((c, i) => ({ id: i, givenName: c.givenName, familyName: c.familyName })),
 );
 
 const lunrIndex = lunr(function () {
@@ -163,7 +164,7 @@ describe('10K contacts - cold start (build + search)', () => {
   bench('minisearch', () => {
     const ms = new MiniSearch({ fields: ['givenName', 'familyName'] });
     ms.addAll(
-      ManyContacts.map((c, i) => ({ id: i, givenName: c.givenName, familyName: c.familyName }))
+      ManyContacts.map((c, i) => ({ id: i, givenName: c.givenName, familyName: c.familyName })),
     );
     ms.search(queries.medium);
   });

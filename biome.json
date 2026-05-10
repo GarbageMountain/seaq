@@ -1,6 +1,14 @@
 {
   "files": {
-    "includes": ["**", "!**/dist", "!**/node_modules", "!**/.tsc-out", "!**/coverage"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/node_modules",
+      "!**/.tsc-out",
+      "!**/coverage",
+      "!packages/test-data/data",
+      "!packages/core/benchmarks"
+    ]
   },
   "formatter": {
     "indentStyle": "space",

@@ -126,7 +126,14 @@ describe('string_score', () => {
       const target = 'Hello World';
       const query = 'hel';
       const without = string_score(target, query);
-      const withLower = string_score(target, query, undefined, query.toLowerCase(), undefined, target.toLowerCase());
+      const withLower = string_score(
+        target,
+        query,
+        undefined,
+        query.toLowerCase(),
+        undefined,
+        target.toLowerCase(),
+      );
       expect(withLower).toBe(without);
     });
 
@@ -134,7 +141,14 @@ describe('string_score', () => {
       const target = 'Hello World';
       const query = 'hxl';
       const without = string_score(target, query, 0.5);
-      const withLower = string_score(target, query, 0.5, query.toLowerCase(), undefined, target.toLowerCase());
+      const withLower = string_score(
+        target,
+        query,
+        0.5,
+        query.toLowerCase(),
+        undefined,
+        target.toLowerCase(),
+      );
       expect(withLower).toBe(without);
     });
 
@@ -142,7 +156,14 @@ describe('string_score', () => {
       const target = 'Hillsdale Michigan';
       const query = 'HiMi';
       const without = string_score(target, query, 0);
-      const withLower = string_score(target, query, 0, query.toLowerCase(), undefined, target.toLowerCase());
+      const withLower = string_score(
+        target,
+        query,
+        0,
+        query.toLowerCase(),
+        undefined,
+        target.toLowerCase(),
+      );
       expect(withLower).toBe(without);
     });
 

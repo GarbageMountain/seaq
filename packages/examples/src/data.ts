@@ -1,7 +1,7 @@
-import type { Contact, City, Book } from '@seaq/test-data';
-import contactsJson from '@seaq/test-data/contacts-1k.json';
-import citiesJson from '@seaq/test-data/cities.json';
+import type { Book, City, Contact } from '@seaq/test-data';
 import booksJson from '@seaq/test-data/books.json';
+import citiesJson from '@seaq/test-data/cities.json';
+import contactsJson from '@seaq/test-data/contacts-1k.json';
 
 export type { Contact, City, Book };
 

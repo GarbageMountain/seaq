@@ -18,7 +18,13 @@ describe('compare with fusejs', () => {
 
   it('seaqs', () => {
     const start = performance.now();
-    const seaqResults = seaq(Books, 'hi', { keys: ['title', 'author.firstName'], fieldMode: 'joined', fuzziness: 0, limit: Infinity, threshold: 0 });
+    const seaqResults = seaq(Books, 'hi', {
+      keys: ['title', 'author.firstName'],
+      fieldMode: 'joined',
+      fuzziness: 0,
+      limit: Infinity,
+      threshold: 0,
+    });
     console.log(performance.now() - start);
     expect(seaqResults.length).toBe(9);
   });
@@ -39,12 +45,24 @@ describe('compare with fusejs', () => {
 
   it('seaqs big', () => {
     let start = performance.now();
-    const seaqResults = seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0, limit: Infinity, threshold: 0 });
+    const seaqResults = seaq(ManyContacts, 'nath fe', {
+      keys: ['givenName', 'familyName'],
+      fieldMode: 'joined',
+      fuzziness: 0,
+      limit: Infinity,
+      threshold: 0,
+    });
     console.log(performance.now() - start);
     expect(seaqResults.length).toBeGreaterThan(0);
     expect(seaqResults[0].givenName).toBeDefined();
     start = performance.now();
-    const seaqResults2 = seaq(ManyContacts, 'nath fe', { keys: ['givenName', 'familyName'], fieldMode: 'joined', fuzziness: 0, limit: Infinity, threshold: 0 });
+    const seaqResults2 = seaq(ManyContacts, 'nath fe', {
+      keys: ['givenName', 'familyName'],
+      fieldMode: 'joined',
+      fuzziness: 0,
+      limit: Infinity,
+      threshold: 0,
+    });
     console.log(performance.now() - start);
     expect(seaqResults2[0]).toEqual(seaqResults[0]);
   });

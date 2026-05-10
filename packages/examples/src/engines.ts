@@ -1,11 +1,18 @@
+import uFuzzy from '@leeoniya/ufuzzy';
+import Fuse from 'fuse.js';
+import lunr from 'lunr';
+import MiniSearch from 'minisearch';
 import { seaq } from 'seaq';
 import { seaq as seaqV1 } from 'seaq-v1';
-import Fuse from 'fuse.js';
-import MiniSearch from 'minisearch';
-import uFuzzy from '@leeoniya/ufuzzy';
-import lunr from 'lunr';
+import type {
+  FuseConfig,
+  LunrConfig,
+  MiniSearchConfig,
+  SeaqConfig,
+  SeaqV1Config,
+  UFuzzyConfig,
+} from './App';
 import type { DatasetConfig } from './data';
-import type { SeaqConfig, SeaqV1Config, FuseConfig, MiniSearchConfig, UFuzzyConfig, LunrConfig } from './App';
 
 export interface SearchResult {
   results: string[];
@@ -26,31 +33,40 @@ function isStringArray(data: unknown[]): data is string[] {
   return data.length === 0 || typeof data[0] === 'string';
 }
 
+// Unwrap a value known to be defined (e.g. an index lookup that's already
+// been bounds-checked). Throws in dev if the invariant is violated.
+function unwrap<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error('unwrap: value is undefined');
+  return value;
+}
+
 // ── seaq ──
 
-export function searchSeaq(dataset: DatasetConfig, query: string, config: SeaqConfig): SearchResult {
+export function searchSeaq(
+  dataset: DatasetConfig,
+  query: string,
+  config: SeaqConfig,
+): SearchResult {
   const keys = dataset.keys;
   const { result, timeMs } = timed(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic dataset types
-    return (seaq as any)(dataset.data, query, {
-      ...(keys.length > 0 ? { keys } : {}),
+    return seaq(dataset.data, query, {
+      keys: keys.length > 0 ? keys : undefined,
       fuzziness: config.fuzziness,
       fieldMode: config.fieldMode,
-      ...(config.limit != null ? { limit: config.limit } : {}),
+      limit: config.limit ?? undefined,
       threshold: config.threshold,
       includeMatches: true,
-    }) as { item: unknown; score: number; matches: { key?: string; value: string; indices: [number, number][]; score: number }[] }[];
+    });
   });
   const top = result.slice(0, config.limit ?? 10);
   return {
     results: top.map((r) => dataset.displayFn(r.item)),
     highlighted: top.map((r) => {
       const matches = r.matches;
-      if (!matches || matches.length === 0) {
+      const first = matches?.[0];
+      if (!first) {
         return buildFieldsHtml(r.item, dataset.keys, (val) => esc(val));
       }
-
-      const first = matches[0]!;
 
       // String/no-keys mode: highlight directly using indices
       if (keys.length === 0) {
@@ -98,7 +114,11 @@ export function searchSeaq(dataset: DatasetConfig, query: string, config: SeaqCo
 
 // ── seaq v1 ──
 
-export function searchSeaqV1(dataset: DatasetConfig, query: string, config: SeaqV1Config): SearchResult {
+export function searchSeaqV1(
+  dataset: DatasetConfig,
+  query: string,
+  config: SeaqV1Config,
+): SearchResult {
   const keys = dataset.keys;
   const { result, timeMs } = timed(() => {
     return seaqV1(
@@ -123,13 +143,25 @@ export function searchSeaqV1(dataset: DatasetConfig, query: string, config: Seaq
 
 // ── Fuse.js ──
 
-let fuseCache: { data: unknown[]; keys: string[]; configKey: string; index: Fuse<unknown> } | null = null;
+let fuseCache: { data: unknown[]; keys: string[]; configKey: string; index: Fuse<unknown> } | null =
+  null;
 
 function fuseConfigKey(keys: string[], config: FuseConfig): string {
-  return JSON.stringify({ keys, threshold: config.threshold, distance: config.distance, ignoreLocation: config.ignoreLocation, minMatchCharLength: config.minMatchCharLength, isCaseSensitive: config.isCaseSensitive });
+  return JSON.stringify({
+    keys,
+    threshold: config.threshold,
+    distance: config.distance,
+    ignoreLocation: config.ignoreLocation,
+    minMatchCharLength: config.minMatchCharLength,
+    isCaseSensitive: config.isCaseSensitive,
+  });
 }
 
-export function searchFuse(dataset: DatasetConfig, query: string, config: FuseConfig): SearchResult {
+export function searchFuse(
+  dataset: DatasetConfig,
+  query: string,
+  config: FuseConfig,
+): SearchResult {
   const keys = dataset.keys;
   const ck = fuseConfigKey(keys, config);
 
@@ -236,12 +268,20 @@ function flattenItem(item: unknown, keys: string[]): Record<string, string> {
   return flat;
 }
 
-export function searchMiniSearch(dataset: DatasetConfig, query: string, config: MiniSearchConfig): SearchResult {
+export function searchMiniSearch(
+  dataset: DatasetConfig,
+  query: string,
+  config: MiniSearchConfig,
+): SearchResult {
   const keys = dataset.keys;
 
   const { result, timeMs } = timed(() => {
     let ms: MiniSearch;
-    if (config.preIndexed && miniCache?.data === dataset.data && arraysEqual(miniCache.keys, keys)) {
+    if (
+      config.preIndexed &&
+      miniCache?.data === dataset.data &&
+      arraysEqual(miniCache.keys, keys)
+    ) {
       ms = miniCache.index;
     } else {
       if (isStringArray(dataset.data)) {
@@ -271,7 +311,7 @@ export function searchMiniSearch(dataset: DatasetConfig, query: string, config: 
   });
 
   const topResults = result.slice(0, 10);
-  const topItems = topResults.map((r) => dataset.data[r.id as number]!);
+  const topItems = topResults.map((r) => unwrap(dataset.data[r.id as number]));
   const highlighted = topResults.map((r, i) => {
     const terms = Object.keys(r.match);
     return buildFieldsHtml(topItems[i], dataset.keys, (val) => highlightTerms(val, terms));
@@ -292,7 +332,11 @@ export function clearMiniSearchCache() {
 
 // ── uFuzzy ──
 
-export function searchUFuzzy(dataset: DatasetConfig, query: string, config: UFuzzyConfig): SearchResult {
+export function searchUFuzzy(
+  dataset: DatasetConfig,
+  query: string,
+  config: UFuzzyConfig,
+): SearchResult {
   const { result, timeMs } = timed(() => {
     let haystack: string[];
     if (isStringArray(dataset.data)) {
@@ -308,7 +352,9 @@ export function searchUFuzzy(dataset: DatasetConfig, query: string, config: UFuz
             for (const part of parts) {
               if (val == null) break;
               if (Array.isArray(val)) {
-                val = val.map((v) => String((v as Record<string, unknown>)?.[part] ?? '')).join(' ');
+                val = val
+                  .map((v) => String((v as Record<string, unknown>)?.[part] ?? ''))
+                  .join(' ');
                 break;
               }
               val = (val as Record<string, unknown>)[part];
@@ -335,25 +381,27 @@ export function searchUFuzzy(dataset: DatasetConfig, query: string, config: UFuz
       return { entries: Array.from(idxs).map((idx) => ({ idx, ranges: null })), haystack };
     }
     return {
-      entries: order.map((oi) => ({ idx: info.idx[oi]!, ranges: info.ranges[oi] ?? null })),
+      entries: order.map((oi) => ({ idx: unwrap(info.idx[oi]), ranges: info.ranges[oi] ?? null })),
       haystack,
     };
   });
 
   const { entries, haystack } = result;
   const valid = entries.slice(0, 10).filter((e) => e.idx != null && e.idx < dataset.data.length);
-  const topItems = valid.map((e) => dataset.data[e.idx]!);
+  const topItems = valid.map((e) => unwrap(dataset.data[e.idx]));
   const isStr = isStringArray(dataset.data);
   const highlighted = valid.map((e) => {
     if (isStr && e.ranges) {
       // String data: highlight the actual string with uFuzzy's ranges
-      return uFuzzy.highlight(haystack[e.idx]!, e.ranges, (part, matched) =>
+      return uFuzzy.highlight(unwrap(haystack[e.idx]), e.ranges, (part, matched) =>
         matched ? `<mark>${esc(part)}</mark>` : esc(part),
       );
     }
     // Object data: highlight query terms in field values
     const terms = query.trim().split(/\s+/).filter(Boolean);
-    return buildFieldsHtml(dataset.data[e.idx]!, dataset.keys, (val) => highlightTerms(val, terms));
+    return buildFieldsHtml(unwrap(dataset.data[e.idx]), dataset.keys, (val) =>
+      highlightTerms(val, terms),
+    );
   });
   return {
     results: topItems.map(dataset.displayFn),
@@ -368,12 +416,20 @@ export function searchUFuzzy(dataset: DatasetConfig, query: string, config: UFuz
 
 let lunrCache: { data: unknown[]; keys: string[]; index: lunr.Index } | null = null;
 
-export function searchLunr(dataset: DatasetConfig, query: string, config: LunrConfig): SearchResult {
+export function searchLunr(
+  dataset: DatasetConfig,
+  query: string,
+  config: LunrConfig,
+): SearchResult {
   const keys = dataset.keys;
 
   const { result, timeMs } = timed(() => {
     let idx: lunr.Index;
-    if (config.preIndexed && lunrCache?.data === dataset.data && arraysEqual(lunrCache.keys, keys)) {
+    if (
+      config.preIndexed &&
+      lunrCache?.data === dataset.data &&
+      arraysEqual(lunrCache.keys, keys)
+    ) {
       idx = lunrCache.index;
     } else {
       if (isStringArray(dataset.data)) {
@@ -424,7 +480,7 @@ export function searchLunr(dataset: DatasetConfig, query: string, config: LunrCo
   });
 
   const topResults = result.slice(0, 10);
-  const topItems = topResults.map((r) => dataset.data[Number(r.ref)]!);
+  const topItems = topResults.map((r) => unwrap(dataset.data[Number(r.ref)]));
   // Use original query terms, not Lunr's stemmed metadata keys.
   // Lunr stems words (e.g. "running" → "run") which causes partial highlights.
   const lunrTerms = query.trim().split(/\s+/).filter(Boolean);
@@ -476,11 +532,12 @@ function highlightTerms(text: string, terms: string[]): string {
   const re = new RegExp(pattern, 'gi');
   let html = '';
   let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
+  let m = re.exec(text);
+  while (m !== null) {
     html += esc(text.slice(last, m.index));
     html += `<mark>${esc(m[0])}</mark>`;
     last = m.index + m[0].length;
+    m = re.exec(text);
   }
   html += esc(text.slice(last));
   return html;

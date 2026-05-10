@@ -4,9 +4,10 @@
  * seaq gives bonus score to acronym matches - this tests that unique feature.
  * Example: "NYC" should match "New York City" highly, "HiMi" → "Hillsdale Michigan"
  */
+
+import uFuzzy from '@leeoniya/ufuzzy';
 import Fuse from 'fuse.js';
 import MiniSearch from 'minisearch';
-import uFuzzy from '@leeoniya/ufuzzy';
 import { describe, expect, test } from 'vitest';
 import { seaq } from '../../src/index';
 
@@ -75,15 +76,60 @@ const acronymTests = [
   { query: 'SF', data: places, expected: 'San Francisco', description: 'SF → San Francisco' },
   { query: 'LV', data: places, expected: 'Las Vegas', description: 'LV → Las Vegas' },
   { query: 'SLC', data: places, expected: 'Salt Lake City', description: 'SLC → Salt Lake City' },
-  { query: 'HiMi', data: places, expected: 'Hillsdale Michigan', description: 'HiMi → Hillsdale Michigan' },
-  { query: 'IBM', data: companies, expected: 'International Business Machines', description: 'IBM → International Business Machines' },
-  { query: 'NASA', data: companies, expected: 'National Aeronautics Space Administration', description: 'NASA → National Aeronautics Space Administration' },
-  { query: 'FBI', data: companies, expected: 'Federal Bureau Investigation', description: 'FBI → Federal Bureau Investigation' },
-  { query: 'API', data: techTerms, expected: 'Application Programming Interface', description: 'API → Application Programming Interface' },
-  { query: 'GUI', data: techTerms, expected: 'Graphical User Interface', description: 'GUI → Graphical User Interface' },
-  { query: 'CLI', data: techTerms, expected: 'Command Line Interface', description: 'CLI → Command Line Interface' },
-  { query: 'TDD', data: techTerms, expected: 'Test Driven Development', description: 'TDD → Test Driven Development' },
-  { query: 'OOP', data: techTerms, expected: 'Object Oriented Programming', description: 'OOP → Object Oriented Programming' },
+  {
+    query: 'HiMi',
+    data: places,
+    expected: 'Hillsdale Michigan',
+    description: 'HiMi → Hillsdale Michigan',
+  },
+  {
+    query: 'IBM',
+    data: companies,
+    expected: 'International Business Machines',
+    description: 'IBM → International Business Machines',
+  },
+  {
+    query: 'NASA',
+    data: companies,
+    expected: 'National Aeronautics Space Administration',
+    description: 'NASA → National Aeronautics Space Administration',
+  },
+  {
+    query: 'FBI',
+    data: companies,
+    expected: 'Federal Bureau Investigation',
+    description: 'FBI → Federal Bureau Investigation',
+  },
+  {
+    query: 'API',
+    data: techTerms,
+    expected: 'Application Programming Interface',
+    description: 'API → Application Programming Interface',
+  },
+  {
+    query: 'GUI',
+    data: techTerms,
+    expected: 'Graphical User Interface',
+    description: 'GUI → Graphical User Interface',
+  },
+  {
+    query: 'CLI',
+    data: techTerms,
+    expected: 'Command Line Interface',
+    description: 'CLI → Command Line Interface',
+  },
+  {
+    query: 'TDD',
+    data: techTerms,
+    expected: 'Test Driven Development',
+    description: 'TDD → Test Driven Development',
+  },
+  {
+    query: 'OOP',
+    data: techTerms,
+    expected: 'Object Oriented Programming',
+    description: 'OOP → Object Oriented Programming',
+  },
 ];
 
 // ============================================================================
@@ -213,7 +259,7 @@ describe('Acronym Quality Summary', () => {
 
       const total = acronymTests.length;
       console.log(
-        `${lib.name.padEnd(11)} | ${String(found).padStart(5)} | ${String(top1).padStart(5)} | ${String(top3).padStart(5)} | ${((found / total) * 100).toFixed(0)}%`
+        `${lib.name.padEnd(11)} | ${String(found).padStart(5)} | ${String(top1).padStart(5)} | ${String(top3).padStart(5)} | ${((found / total) * 100).toFixed(0)}%`,
       );
     }
 
@@ -231,7 +277,9 @@ describe('Acronym Ranking Quality', () => {
     const results = seaq(places, 'HiMi');
 
     console.log('\nseaq "HiMi" ranking:');
-    results.forEach((r, i) => console.log(`  ${i + 1}. ${r}`));
+    for (let i = 0; i < results.length; i++) {
+      console.log(`  ${i + 1}. ${results[i]}`);
+    }
 
     // Hillsdale Michigan should be first (perfect acronym match)
     expect(results[0]).toBe('Hillsdale Michigan');
@@ -257,7 +305,10 @@ describe('Acronym Ranking Quality', () => {
     const results = seaq(companies, 'NAS');
 
     console.log('\nPartial acronym "NAS":');
-    results.slice(0, 5).forEach((r, i) => console.log(`  ${i + 1}. ${r}`));
+    const top = results.slice(0, 5);
+    for (let i = 0; i < top.length; i++) {
+      console.log(`  ${i + 1}. ${top[i]}`);
+    }
 
     expect(results.some((r) => r.includes('National Aeronautics'))).toBe(true);
   });

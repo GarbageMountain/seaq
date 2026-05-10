@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { datasets, type DatasetKey } from './data';
+import { DatasetPicker } from './components/DatasetPicker';
+import { ResultsColumn } from './components/ResultsColumn';
+import { SearchInput } from './components/SearchInput';
+import { type DatasetKey, datasets } from './data';
 import {
   clearFuseCache,
   clearLunrCache,
   clearMiniSearchCache,
+  type SearchResult,
   searchFuse,
   searchLunr,
   searchMiniSearch,
   searchSeaq,
   searchSeaqV1,
   searchUFuzzy,
-  type SearchResult,
 } from './engines';
-import { SearchInput } from './components/SearchInput';
-import { DatasetPicker } from './components/DatasetPicker';
-import { ResultsColumn } from './components/ResultsColumn';
 
 export type EngineKey = 'seaq' | 'seaqv1' | 'fuse' | 'minisearch' | 'ufuzzy' | 'lunr';
 
@@ -105,8 +105,22 @@ export interface EngineConfigs {
 export const defaultConfigs: EngineConfigs = {
   seaq: { fuzziness: 0.2, fieldMode: 'joined', limit: 10, threshold: 0.3 },
   seaqv1: { fuzziness: 0.2 },
-  fuse: { threshold: 0.4, distance: 100, ignoreLocation: false, minMatchCharLength: 2, isCaseSensitive: false, preIndexed: true },
-  minisearch: { fuzzy: 0.2, prefix: true, combineWith: 'OR', fuzzyWeight: 1, prefixWeight: 0.8, preIndexed: true },
+  fuse: {
+    threshold: 0.4,
+    distance: 100,
+    ignoreLocation: false,
+    minMatchCharLength: 2,
+    isCaseSensitive: false,
+    preIndexed: true,
+  },
+  minisearch: {
+    fuzzy: 0.2,
+    prefix: true,
+    combineWith: 'OR',
+    fuzzyWeight: 1,
+    prefixWeight: 0.8,
+    preIndexed: true,
+  },
   ufuzzy: { intraMode: 1, intraSub: 1, intraTrn: 1, intraDel: 1 },
   lunr: { preIndexed: true, wildcard: true, editDistance: 0 },
 };
@@ -151,7 +165,10 @@ export function App() {
 
   const rawDs = useMemo(() => datasets[dataset], [dataset]);
   const allPaths = useMemo(
-    () => (rawDs.data.length > 0 && typeof rawDs.data[0] === 'object' ? discoverStringPaths(rawDs.data as unknown[]) : []),
+    () =>
+      rawDs.data.length > 0 && typeof rawDs.data[0] === 'object'
+        ? discoverStringPaths(rawDs.data as unknown[])
+        : [],
     [rawDs],
   );
   const effectiveKeys = selectedKeys.length > 0 ? selectedKeys : rawDs.keys;
@@ -167,7 +184,9 @@ export function App() {
       let val: unknown = sample;
       for (let i = 0; i < parts.length; i++) {
         if (val == null) break;
-        val = (val as Record<string, unknown>)[parts[i]!];
+        const part = parts[i];
+        if (part === undefined) break;
+        val = (val as Record<string, unknown>)[part];
         if (Array.isArray(val) && i < parts.length - 1) {
           map[key] = {
             arrayPath: parts.slice(0, i + 1).join('.'),
@@ -186,20 +205,30 @@ export function App() {
     clearMiniSearchCache();
     clearLunrCache();
     setSelectedKeys([]);
-  }, [dataset]);
-
-  const updateConfig = useCallback(<K extends EngineKey>(engine: K, patch: Partial<EngineConfigs[K]>) => {
-    setConfigs((prev) => ({
-      ...prev,
-      [engine]: { ...prev[engine], ...patch },
-    }));
   }, []);
+
+  const updateConfig = useCallback(
+    <K extends EngineKey>(engine: K, patch: Partial<EngineConfigs[K]>) => {
+      setConfigs((prev) => ({
+        ...prev,
+        [engine]: { ...prev[engine], ...patch },
+      }));
+    },
+    [],
+  );
 
   // Run search synchronously on every render — no debounce
   // Only run active (non-muted, respecting solo) engines.
   const results = useMemo<Record<EngineKey, SearchResult | null>>(() => {
     const q = query.trim();
-    const empty: Record<EngineKey, SearchResult | null> = { seaq: null, seaqv1: null, fuse: null, minisearch: null, ufuzzy: null, lunr: null };
+    const empty: Record<EngineKey, SearchResult | null> = {
+      seaq: null,
+      seaqv1: null,
+      fuse: null,
+      minisearch: null,
+      ufuzzy: null,
+      lunr: null,
+    };
     if (!q) return empty;
 
     const run: Record<EngineKey, () => SearchResult> = {
@@ -225,7 +254,8 @@ export function App() {
           seaq — Interactive Search Comparison
         </h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Compare seaq v1 &amp; v2 against Fuse.js, MiniSearch, uFuzzy, and Lunr with live results and performance timings.
+          Compare seaq v1 &amp; v2 against Fuse.js, MiniSearch, uFuzzy, and Lunr with live results
+          and performance timings.
         </p>
       </header>
 
@@ -234,9 +264,14 @@ export function App() {
         <DatasetPicker selected={dataset} onChange={setDataset} />
         {allPaths.length > 0 && (
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-xs font-medium text-gray-700 dark:text-gray-200">Search fields:</span>
+            <span className="text-xs font-medium text-gray-700 dark:text-gray-200">
+              Search fields:
+            </span>
             {allPaths.map((k) => (
-              <label key={k} className="flex items-center gap-1 text-xs text-gray-800 dark:text-gray-200">
+              <label
+                key={k}
+                className="flex items-center gap-1 text-xs text-gray-800 dark:text-gray-200"
+              >
                 <input
                   type="checkbox"
                   className="rounded border-gray-300 dark:border-gray-600"
@@ -252,7 +287,9 @@ export function App() {
                 <span>
                   {k}
                   {rawDs.keys.includes(k) && (
-                    <span className="ml-0.5 text-[10px] text-gray-500 dark:text-gray-400">(default)</span>
+                    <span className="ml-0.5 text-[10px] text-gray-500 dark:text-gray-400">
+                      (default)
+                    </span>
                   )}
                 </span>
               </label>
@@ -263,9 +300,7 @@ export function App() {
           <summary className="cursor-pointer select-none px-4 py-2 text-xs text-gray-400 hover:text-gray-300">
             <span className="font-medium">Sample entry</span>
             {ds.keys.length > 0 && (
-              <span className="ml-2 text-gray-500">
-                keys: [{ds.keys.join(', ')}]
-              </span>
+              <span className="ml-2 text-gray-500">keys: [{ds.keys.join(', ')}]</span>
             )}
           </summary>
           <pre className="overflow-x-auto whitespace-pre border-t border-gray-800 px-4 py-3 text-xs leading-relaxed text-gray-100">

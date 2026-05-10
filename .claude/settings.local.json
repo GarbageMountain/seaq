@@ -17,7 +17,9 @@
       "Bash(grep:*)",
       "mcp__ide__getDiagnostics",
       "Bash(gh pr view:*)",
-      "Bash(gh pr edit:*)"
+      "Bash(gh pr edit:*)",
+      "Bash(yarn biome *)",
+      "Bash(yarn check *)"
     ],
     "deny": [],
     "ask": []

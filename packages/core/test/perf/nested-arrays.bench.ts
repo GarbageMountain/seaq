@@ -35,13 +35,71 @@ interface Contact {
 
 // Generate test data
 function generateContacts(count: number): Contact[] {
-  const firstNames = ['John', 'Jane', 'Mike', 'Sarah', 'David', 'Emily', 'Chris', 'Lisa', 'Tom', 'Anna'];
-  const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Wilson', 'Anderson'];
-  const companies = ['Acme Corp', 'TechStart', 'BigCorp', 'StartupCo', 'MegaInc', 'DataSystems', 'CloudNine', 'DevHouse'];
-  const cities = ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia', 'San Antonio', 'San Diego'];
+  const firstNames = [
+    'John',
+    'Jane',
+    'Mike',
+    'Sarah',
+    'David',
+    'Emily',
+    'Chris',
+    'Lisa',
+    'Tom',
+    'Anna',
+  ];
+  const lastNames = [
+    'Smith',
+    'Johnson',
+    'Williams',
+    'Brown',
+    'Jones',
+    'Garcia',
+    'Miller',
+    'Davis',
+    'Wilson',
+    'Anderson',
+  ];
+  const companies = [
+    'Acme Corp',
+    'TechStart',
+    'BigCorp',
+    'StartupCo',
+    'MegaInc',
+    'DataSystems',
+    'CloudNine',
+    'DevHouse',
+  ];
+  const cities = [
+    'New York',
+    'Los Angeles',
+    'Chicago',
+    'Houston',
+    'Phoenix',
+    'Philadelphia',
+    'San Antonio',
+    'San Diego',
+  ];
   const states = ['NY', 'CA', 'IL', 'TX', 'AZ', 'PA', 'TX', 'CA'];
-  const departments = ['Engineering', 'Sales', 'Marketing', 'HR', 'Finance', 'Operations', 'Legal', 'Support'];
-  const roles = ['Manager', 'Director', 'Engineer', 'Analyst', 'Lead', 'VP', 'Associate', 'Specialist'];
+  const departments = [
+    'Engineering',
+    'Sales',
+    'Marketing',
+    'HR',
+    'Finance',
+    'Operations',
+    'Legal',
+    'Support',
+  ];
+  const roles = [
+    'Manager',
+    'Director',
+    'Engineer',
+    'Analyst',
+    'Lead',
+    'VP',
+    'Associate',
+    'Specialist',
+  ];
   const emailDomains = ['gmail.com', 'yahoo.com', 'company.com', 'work.org', 'mail.net'];
   const tags = ['vip', 'lead', 'customer', 'prospect', 'partner', 'vendor', 'internal', 'external'];
 
@@ -56,7 +114,10 @@ function generateContacts(count: number): Contact[] {
       id: i,
       name: `${firstName} ${lastName}`,
       emails: [
-        { type: 'work', address: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@${emailDomains[i % emailDomains.length]}` },
+        {
+          type: 'work',
+          address: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@${emailDomains[i % emailDomains.length]}`,
+        },
         { type: 'personal', address: `${firstName.toLowerCase()}${i}@gmail.com` },
       ],
       phones: [

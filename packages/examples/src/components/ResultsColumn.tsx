@@ -1,17 +1,17 @@
-import type { SearchResult } from '../engines';
 import {
-  defaultConfigs,
-  type EngineKey,
-  type EngineConfigs,
-  type EngineToggle,
   type ArrayKeyMap,
+  defaultConfigs,
+  type EngineConfigs,
+  type EngineKey,
+  type EngineToggle,
+  type FuseConfig,
+  type LunrConfig,
+  type MiniSearchConfig,
   type SeaqConfig,
   type SeaqV1Config,
-  type FuseConfig,
-  type MiniSearchConfig,
   type UFuzzyConfig,
-  type LunrConfig,
 } from '../App';
+import type { SearchResult } from '../engines';
 
 interface ResultsColumnProps {
   engineKey: EngineKey;
@@ -79,7 +79,12 @@ function fuseSnippet(query: string, keys: string[], config: FuseConfig): string 
   ].join('\n');
 }
 
-function miniSearchSnippet(query: string, keys: string[], arrayKeyMap: ArrayKeyMap, config: MiniSearchConfig): string {
+function miniSearchSnippet(
+  query: string,
+  keys: string[],
+  arrayKeyMap: ArrayKeyMap,
+  config: MiniSearchConfig,
+): string {
   const fields = keys.length > 0 ? keys.map((k) => q(k.replace(/\./g, '_'))).join(', ') : "'text'";
   const searchOpts: string[] = [];
   searchOpts.push(`prefix: ${config.prefix}`);
@@ -143,28 +148,33 @@ function uFuzzySnippet(query: string, config: UFuzzyConfig): string {
   ].join('\n');
 }
 
-function lunrSnippet(query: string, keys: string[], arrayKeyMap: ArrayKeyMap, config: LunrConfig): string {
+function lunrSnippet(
+  query: string,
+  keys: string[],
+  arrayKeyMap: ArrayKeyMap,
+  config: LunrConfig,
+): string {
   const fields = keys.length > 0 ? keys.map((k) => k.replace(/\./g, '_')) : ['text'];
-  const fieldLines = fields.map((f, i) => {
-    const origKey = keys[i];
-    if (origKey && origKey.includes('.')) {
-      const arrayInfo = origKey ? arrayKeyMap[origKey] : undefined;
-      if (arrayInfo) {
-        return [
-          `  this.field('${f}', {`,
-          `    extractor: (doc) => doc.${arrayInfo.arrayPath}`,
-          `      .map(e => e.${arrayInfo.innerPath}).join(' ')`,
-          `  })`,
-        ].join('\n');
+  const fieldLines = fields
+    .map((f, i) => {
+      const origKey = keys[i];
+      if (origKey?.includes('.')) {
+        const arrayInfo = origKey ? arrayKeyMap[origKey] : undefined;
+        if (arrayInfo) {
+          return [
+            `  this.field('${f}', {`,
+            `    extractor: (doc) => doc.${arrayInfo.arrayPath}`,
+            `      .map(e => e.${arrayInfo.innerPath}).join(' ')`,
+            `  })`,
+          ].join('\n');
+        }
+        return [`  this.field('${f}', {`, `    extractor: (doc) => doc.${origKey}`, `  })`].join(
+          '\n',
+        );
       }
-      return [
-        `  this.field('${f}', {`,
-        `    extractor: (doc) => doc.${origKey}`,
-        `  })`,
-      ].join('\n');
-    }
-    return `  this.field('${f}')`;
-  }).join('\n');
+      return `  this.field('${f}')`;
+    })
+    .join('\n');
   const lines = [
     `const idx = lunr(function() {`,
     `  this.ref('id')`,
@@ -177,15 +187,27 @@ function lunrSnippet(query: string, keys: string[], arrayKeyMap: ArrayKeyMap, co
   }
   let searchQuery = query;
   if (config.wildcard) {
-    searchQuery = query.split(/\s+/).map((t) => `*${t}*`).join(' ');
+    searchQuery = query
+      .split(/\s+/)
+      .map((t) => `*${t}*`)
+      .join(' ');
   } else if (config.editDistance > 0) {
-    searchQuery = query.split(/\s+/).map((t) => `${t}~${config.editDistance}`).join(' ');
+    searchQuery = query
+      .split(/\s+/)
+      .map((t) => `${t}~${config.editDistance}`)
+      .join(' ');
   }
   lines.push(`idx.search(${q(searchQuery)})`);
   return lines.join('\n');
 }
 
-function codeSnippet(engineKey: EngineKey, query: string, keys: string[], arrayKeyMap: ArrayKeyMap, config: EngineConfigs[EngineKey]): string {
+function codeSnippet(
+  engineKey: EngineKey,
+  query: string,
+  keys: string[],
+  arrayKeyMap: ArrayKeyMap,
+  config: EngineConfigs[EngineKey],
+): string {
   const dq = query || '...';
   switch (engineKey) {
     case 'seaq':
@@ -205,7 +227,13 @@ function codeSnippet(engineKey: EngineKey, query: string, keys: string[], arrayK
 
 // ── Shared control component ──
 
-function Select({ label, hint, value, options, onChange }: {
+function Select({
+  label,
+  hint,
+  value,
+  options,
+  onChange,
+}: {
   label: string;
   hint: string;
   value: string | number;
@@ -218,7 +246,9 @@ function Select({ label, hint, value, options, onChange }: {
         {label}:{' '}
         <select className={selectClass} value={value} onChange={(e) => onChange(e.target.value)}>
           {options.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
           ))}
         </select>
       </label>
@@ -227,7 +257,12 @@ function Select({ label, hint, value, options, onChange }: {
   );
 }
 
-function Check({ label, hint, checked, onChange }: {
+function Check({
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
   label: string;
   hint: string;
   checked: boolean;
@@ -236,7 +271,12 @@ function Check({ label, hint, checked, onChange }: {
   return (
     <div>
       <label className={`${labelClass} flex items-center gap-1`}>
-        <input type="checkbox" className={checkClass} checked={checked} onChange={(e) => onChange(e.target.checked)} />
+        <input
+          type="checkbox"
+          className={checkClass}
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+        />
         {label}
       </label>
       <span className={hintClass}>{hint}</span>
@@ -246,7 +286,13 @@ function Check({ label, hint, checked, onChange }: {
 
 // ── Config controls ──
 
-function SeaqControls({ config, onChange }: { config: SeaqConfig; onChange: (p: Partial<SeaqConfig>) => void }) {
+function SeaqControls({
+  config,
+  onChange,
+}: {
+  config: SeaqConfig;
+  onChange: (p: Partial<SeaqConfig>) => void;
+}) {
   return (
     <>
       <Select
@@ -305,27 +351,37 @@ function SeaqControls({ config, onChange }: { config: SeaqConfig; onChange: (p: 
   );
 }
 
-function SeaqV1Controls({ config, onChange }: { config: SeaqV1Config; onChange: (p: Partial<SeaqV1Config>) => void }) {
+function SeaqV1Controls({
+  config,
+  onChange,
+}: {
+  config: SeaqV1Config;
+  onChange: (p: Partial<SeaqV1Config>) => void;
+}) {
   return (
-    <>
-      <Select
-        label="Fuzziness"
-        hint="Typo tolerance. 0 = strict (v1 default)."
-        value={config.fuzziness}
-        options={[
-          { value: '0', label: '0 (strict)' },
-          { value: '0.2', label: '0.2 (default)' },
-          { value: '0.5', label: '0.5' },
-          { value: '0.8', label: '0.8' },
-          { value: '1', label: '1' },
-        ]}
-        onChange={(v) => onChange({ fuzziness: Number(v) })}
-      />
-    </>
+    <Select
+      label="Fuzziness"
+      hint="Typo tolerance. 0 = strict (v1 default)."
+      value={config.fuzziness}
+      options={[
+        { value: '0', label: '0 (strict)' },
+        { value: '0.2', label: '0.2 (default)' },
+        { value: '0.5', label: '0.5' },
+        { value: '0.8', label: '0.8' },
+        { value: '1', label: '1' },
+      ]}
+      onChange={(v) => onChange({ fuzziness: Number(v) })}
+    />
   );
 }
 
-function FuseControls({ config, onChange }: { config: FuseConfig; onChange: (p: Partial<FuseConfig>) => void }) {
+function FuseControls({
+  config,
+  onChange,
+}: {
+  config: FuseConfig;
+  onChange: (p: Partial<FuseConfig>) => void;
+}) {
   return (
     <>
       <Select
@@ -391,7 +447,10 @@ function FuseControls({ config, onChange }: { config: FuseConfig; onChange: (p: 
 function MiniSearchControls({
   config,
   onChange,
-}: { config: MiniSearchConfig; onChange: (p: Partial<MiniSearchConfig>) => void }) {
+}: {
+  config: MiniSearchConfig;
+  onChange: (p: Partial<MiniSearchConfig>) => void;
+}) {
   return (
     <>
       <Select
@@ -459,7 +518,10 @@ function MiniSearchControls({
 function UFuzzyControls({
   config,
   onChange,
-}: { config: UFuzzyConfig; onChange: (p: Partial<UFuzzyConfig>) => void }) {
+}: {
+  config: UFuzzyConfig;
+  onChange: (p: Partial<UFuzzyConfig>) => void;
+}) {
   return (
     <>
       <Select
@@ -498,7 +560,13 @@ function UFuzzyControls({
   );
 }
 
-function LunrControls({ config, onChange }: { config: LunrConfig; onChange: (p: Partial<LunrConfig>) => void }) {
+function LunrControls({
+  config,
+  onChange,
+}: {
+  config: LunrConfig;
+  onChange: (p: Partial<LunrConfig>) => void;
+}) {
   return (
     <>
       <Check
@@ -516,7 +584,9 @@ function LunrControls({ config, onChange }: { config: LunrConfig; onChange: (p: 
           { value: '1', label: '1' },
           { value: '2', label: '2' },
         ]}
-        onChange={(v) => onChange({ editDistance: Number(v), ...(Number(v) > 0 ? { wildcard: false } : {}) })}
+        onChange={(v) =>
+          onChange({ editDistance: Number(v), ...(Number(v) > 0 ? { wildcard: false } : {}) })
+        }
       />
       <Check
         label="Pre-indexed"
@@ -531,17 +601,47 @@ function LunrControls({ config, onChange }: { config: LunrConfig; onChange: (p: 
 function ConfigControls({ engineKey, config, onConfigChange }: ResultsColumnProps) {
   switch (engineKey) {
     case 'seaq':
-      return <SeaqControls config={config as SeaqConfig} onChange={onConfigChange as any} />;
+      return (
+        <SeaqControls
+          config={config as SeaqConfig}
+          onChange={onConfigChange as (p: Partial<SeaqConfig>) => void}
+        />
+      );
     case 'seaqv1':
-      return <SeaqV1Controls config={config as SeaqV1Config} onChange={onConfigChange as any} />;
+      return (
+        <SeaqV1Controls
+          config={config as SeaqV1Config}
+          onChange={onConfigChange as (p: Partial<SeaqV1Config>) => void}
+        />
+      );
     case 'fuse':
-      return <FuseControls config={config as FuseConfig} onChange={onConfigChange as any} />;
+      return (
+        <FuseControls
+          config={config as FuseConfig}
+          onChange={onConfigChange as (p: Partial<FuseConfig>) => void}
+        />
+      );
     case 'minisearch':
-      return <MiniSearchControls config={config as MiniSearchConfig} onChange={onConfigChange as any} />;
+      return (
+        <MiniSearchControls
+          config={config as MiniSearchConfig}
+          onChange={onConfigChange as (p: Partial<MiniSearchConfig>) => void}
+        />
+      );
     case 'ufuzzy':
-      return <UFuzzyControls config={config as UFuzzyConfig} onChange={onConfigChange as any} />;
+      return (
+        <UFuzzyControls
+          config={config as UFuzzyConfig}
+          onChange={onConfigChange as (p: Partial<UFuzzyConfig>) => void}
+        />
+      );
     case 'lunr':
-      return <LunrControls config={config as LunrConfig} onChange={onConfigChange as any} />;
+      return (
+        <LunrControls
+          config={config as LunrConfig}
+          onChange={onConfigChange as (p: Partial<LunrConfig>) => void}
+        />
+      );
   }
 }
 
@@ -550,15 +650,18 @@ function ConfigControls({ engineKey, config, onConfigChange }: ResultsColumnProp
 const toggleBtnBase = 'w-5 h-5 rounded text-[10px] font-bold leading-none transition-colors';
 
 export function ResultsColumn(props: ResultsColumnProps) {
-  const { name, query, keys, arrayKeyMap, engineKey, config, result, toggle, onToggle, active } = props;
+  const { name, query, keys, arrayKeyMap, engineKey, config, result, toggle, onToggle, active } =
+    props;
   const snippet = codeSnippet(engineKey, query, keys, arrayKeyMap, config);
 
   return (
-    <div className={`flex min-w-0 flex-1 flex-col rounded-lg border shadow-sm transition-opacity ${
-      active
-        ? 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'
-        : 'border-gray-200/50 bg-gray-50 opacity-40 dark:border-gray-700/50 dark:bg-gray-800/50'
-    }`}>
+    <div
+      className={`flex min-w-0 flex-1 flex-col rounded-lg border shadow-sm transition-opacity ${
+        active
+          ? 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'
+          : 'border-gray-200/50 bg-gray-50 opacity-40 dark:border-gray-700/50 dark:bg-gray-800/50'
+      }`}
+    >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
         <div className="flex items-center gap-2">
@@ -592,12 +695,16 @@ export function ResultsColumn(props: ResultsColumnProps) {
           <button
             type="button"
             className="rounded border border-gray-300 px-1.5 py-0.5 text-[10px] text-gray-500 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700"
-            onClick={() => props.onConfigChange(defaultConfigs[engineKey] as any)}
+            onClick={() =>
+              props.onConfigChange(defaultConfigs[engineKey] as Partial<EngineConfigs[EngineKey]>)
+            }
           >
             Reset
           </button>
           {result && (
-            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${timingColor(result.timeMs)}`}>
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${timingColor(result.timeMs)}`}
+            >
               {result.timeMs.toFixed(1)}ms
             </span>
           )}
@@ -626,10 +733,12 @@ export function ResultsColumn(props: ResultsColumnProps) {
           <>
             <ul className="space-y-0.5">
               {result.highlighted.map((html, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: results re-render fully per query; index is stable within a render
                 <li key={i}>
                   <details className="group">
                     <summary
                       className="cursor-pointer whitespace-pre-wrap text-[11px] leading-snug text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100"
+                      // biome-ignore lint/security/noDangerouslySetInnerHtml: html is pre-escaped by buildFieldsHtml/highlightTerms before <mark> insertion
                       dangerouslySetInnerHTML={{ __html: html }}
                     />
                     <pre className="mt-1 mb-1 overflow-x-auto rounded bg-gray-900 px-2 py-1.5 text-[9px] leading-snug text-gray-100">

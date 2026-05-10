@@ -4,9 +4,10 @@
  * Tests precision, recall, and ranking quality across search libraries.
  * This answers "which library gives the best results?" not "which is fastest?"
  */
+
+import uFuzzy from '@leeoniya/ufuzzy';
 import Fuse from 'fuse.js';
 import MiniSearch from 'minisearch';
-import uFuzzy from '@leeoniya/ufuzzy';
 import { describe, expect, test } from 'vitest';
 import { seaq } from '../../src/index';
 
@@ -24,20 +25,65 @@ interface Person {
 
 // Dataset with known "correct" answers for various queries
 const people: Person[] = [
-  { id: 1, name: 'John Smith', email: 'john.smith@acme.com', company: 'Acme Corp', city: 'New York' },
-  { id: 2, name: 'John Johnson', email: 'jj@techstart.io', company: 'TechStart', city: 'San Francisco' },
-  { id: 3, name: 'Johnny Appleseed', email: 'johnny@apple.com', company: 'Apple Inc', city: 'Cupertino' },
+  {
+    id: 1,
+    name: 'John Smith',
+    email: 'john.smith@acme.com',
+    company: 'Acme Corp',
+    city: 'New York',
+  },
+  {
+    id: 2,
+    name: 'John Johnson',
+    email: 'jj@techstart.io',
+    company: 'TechStart',
+    city: 'San Francisco',
+  },
+  {
+    id: 3,
+    name: 'Johnny Appleseed',
+    email: 'johnny@apple.com',
+    company: 'Apple Inc',
+    city: 'Cupertino',
+  },
   { id: 4, name: 'Jane Smith', email: 'jane@acme.com', company: 'Acme Corp', city: 'New York' },
-  { id: 5, name: 'Jonathan Winters', email: 'jwinters@comedy.com', company: 'Comedy Central', city: 'Los Angeles' },
-  { id: 6, name: 'Sarah Connor', email: 'sarah@skynet.com', company: 'Cyberdyne', city: 'Los Angeles' },
+  {
+    id: 5,
+    name: 'Jonathan Winters',
+    email: 'jwinters@comedy.com',
+    company: 'Comedy Central',
+    city: 'Los Angeles',
+  },
+  {
+    id: 6,
+    name: 'Sarah Connor',
+    email: 'sarah@skynet.com',
+    company: 'Cyberdyne',
+    city: 'Los Angeles',
+  },
   { id: 7, name: 'Mike Johnson', email: 'mike.j@bigcorp.com', company: 'BigCorp', city: 'Chicago' },
   { id: 8, name: 'Emily Zhang', email: 'ezhang@startup.co', company: 'Startup Co', city: 'Boston' },
-  { id: 9, name: 'Robert Brown', email: 'rbrown@finance.com', company: 'Finance Inc', city: 'New York' },
-  { id: 10, name: 'Lisa Anderson', email: 'lisa@design.studio', company: 'Design Studio', city: 'Seattle' },
+  {
+    id: 9,
+    name: 'Robert Brown',
+    email: 'rbrown@finance.com',
+    company: 'Finance Inc',
+    city: 'New York',
+  },
+  {
+    id: 10,
+    name: 'Lisa Anderson',
+    email: 'lisa@design.studio',
+    company: 'Design Studio',
+    city: 'Seattle',
+  },
 ];
 
 // Ground truth: for each query, which IDs should be returned (in ideal order)
-const groundTruth: Record<string, { query: string; keys: string[]; expected: number[]; description: string }> = {
+const groundTruth: Record<
+  string,
+  { query: string; keys: string[]; expected: number[]; description: string }
+> = {
   exactName: {
     query: 'John Smith',
     keys: ['name'],
@@ -144,8 +190,12 @@ describe('Quality Metrics: Precision & Recall', () => {
       const retrieved = searchSeaq(query, keys, false);
       const metrics = calculateMetrics(retrieved, expected);
 
-      console.log(`seaq "${query}": found [${retrieved.join(', ')}], expected [${expected.join(', ')}]`);
-      console.log(`  Precision: ${(metrics.precision * 100).toFixed(0)}%, Recall: ${(metrics.recall * 100).toFixed(0)}%, MRR: ${metrics.mrr.toFixed(2)}`);
+      console.log(
+        `seaq "${query}": found [${retrieved.join(', ')}], expected [${expected.join(', ')}]`,
+      );
+      console.log(
+        `  Precision: ${(metrics.precision * 100).toFixed(0)}%, Recall: ${(metrics.recall * 100).toFixed(0)}%, MRR: ${metrics.mrr.toFixed(2)}`,
+      );
 
       // We just document behavior, don't fail on low scores
       expect(true).toBe(true);
@@ -157,8 +207,12 @@ describe('Quality Metrics: Precision & Recall', () => {
       const retrieved = searchSeaq(query, keys, true);
       const metrics = calculateMetrics(retrieved, expected);
 
-      console.log(`seaq-fuzzy "${query}": found [${retrieved.join(', ')}], expected [${expected.join(', ')}]`);
-      console.log(`  Precision: ${(metrics.precision * 100).toFixed(0)}%, Recall: ${(metrics.recall * 100).toFixed(0)}%, MRR: ${metrics.mrr.toFixed(2)}`);
+      console.log(
+        `seaq-fuzzy "${query}": found [${retrieved.join(', ')}], expected [${expected.join(', ')}]`,
+      );
+      console.log(
+        `  Precision: ${(metrics.precision * 100).toFixed(0)}%, Recall: ${(metrics.recall * 100).toFixed(0)}%, MRR: ${metrics.mrr.toFixed(2)}`,
+      );
 
       expect(true).toBe(true);
     });
@@ -169,8 +223,12 @@ describe('Quality Metrics: Precision & Recall', () => {
       const retrieved = searchFuse(query, keys);
       const metrics = calculateMetrics(retrieved, expected);
 
-      console.log(`fuse "${query}": found [${retrieved.join(', ')}], expected [${expected.join(', ')}]`);
-      console.log(`  Precision: ${(metrics.precision * 100).toFixed(0)}%, Recall: ${(metrics.recall * 100).toFixed(0)}%, MRR: ${metrics.mrr.toFixed(2)}`);
+      console.log(
+        `fuse "${query}": found [${retrieved.join(', ')}], expected [${expected.join(', ')}]`,
+      );
+      console.log(
+        `  Precision: ${(metrics.precision * 100).toFixed(0)}%, Recall: ${(metrics.recall * 100).toFixed(0)}%, MRR: ${metrics.mrr.toFixed(2)}`,
+      );
 
       expect(true).toBe(true);
     });
@@ -181,8 +239,12 @@ describe('Quality Metrics: Precision & Recall', () => {
       const retrieved = searchMiniSearch(query, keys);
       const metrics = calculateMetrics(retrieved, expected);
 
-      console.log(`minisearch "${query}": found [${retrieved.join(', ')}], expected [${expected.join(', ')}]`);
-      console.log(`  Precision: ${(metrics.precision * 100).toFixed(0)}%, Recall: ${(metrics.recall * 100).toFixed(0)}%, MRR: ${metrics.mrr.toFixed(2)}`);
+      console.log(
+        `minisearch "${query}": found [${retrieved.join(', ')}], expected [${expected.join(', ')}]`,
+      );
+      console.log(
+        `  Precision: ${(metrics.precision * 100).toFixed(0)}%, Recall: ${(metrics.recall * 100).toFixed(0)}%, MRR: ${metrics.mrr.toFixed(2)}`,
+      );
 
       expect(true).toBe(true);
     });
@@ -193,8 +255,12 @@ describe('Quality Metrics: Precision & Recall', () => {
       const retrieved = searchUFuzzy(query, keys);
       const metrics = calculateMetrics(retrieved, expected);
 
-      console.log(`ufuzzy "${query}": found [${retrieved.join(', ')}], expected [${expected.join(', ')}]`);
-      console.log(`  Precision: ${(metrics.precision * 100).toFixed(0)}%, Recall: ${(metrics.recall * 100).toFixed(0)}%, MRR: ${metrics.mrr.toFixed(2)}`);
+      console.log(
+        `ufuzzy "${query}": found [${retrieved.join(', ')}], expected [${expected.join(', ')}]`,
+      );
+      console.log(
+        `  Precision: ${(metrics.precision * 100).toFixed(0)}%, Recall: ${(metrics.recall * 100).toFixed(0)}%, MRR: ${metrics.mrr.toFixed(2)}`,
+      );
 
       expect(true).toBe(true);
     });
@@ -215,7 +281,10 @@ describe('Quality Summary', () => {
       { name: 'ufuzzy', search: searchUFuzzy },
     ];
 
-    const results: Record<string, { avgPrecision: number; avgRecall: number; avgMRR: number; topCorrect: number }> = {};
+    const results: Record<
+      string,
+      { avgPrecision: number; avgRecall: number; avgMRR: number; topCorrect: number }
+    > = {};
 
     for (const lib of libraries) {
       let totalPrecision = 0;
@@ -246,7 +315,7 @@ describe('Quality Summary', () => {
     console.log('-------------|-----------|--------|------|---------------');
     for (const [name, r] of Object.entries(results)) {
       console.log(
-        `${name.padEnd(12)} | ${(r.avgPrecision * 100).toFixed(0).padStart(8)}% | ${(r.avgRecall * 100).toFixed(0).padStart(5)}% | ${r.avgMRR.toFixed(2)} | ${r.topCorrect}/${Object.keys(groundTruth).length}`
+        `${name.padEnd(12)} | ${(r.avgPrecision * 100).toFixed(0).padStart(8)}% | ${(r.avgRecall * 100).toFixed(0).padStart(5)}% | ${r.avgMRR.toFixed(2)} | ${r.topCorrect}/${Object.keys(groundTruth).length}`,
       );
     }
 

@@ -1,4 +1,4 @@
-import { datasets, type DatasetKey } from '../data';
+import { type DatasetKey, datasets } from '../data';
 
 interface DatasetPickerProps {
   selected: DatasetKey;
@@ -10,10 +10,13 @@ const datasetKeys = Object.keys(datasets) as DatasetKey[];
 export function DatasetPicker({ selected, onChange }: DatasetPickerProps) {
   return (
     <div className="flex flex-wrap gap-2">
-      <span className="self-center text-sm font-medium text-gray-500 dark:text-gray-400">Dataset:</span>
+      <span className="self-center text-sm font-medium text-gray-500 dark:text-gray-400">
+        Dataset:
+      </span>
       {datasetKeys.map((key) => (
         <button
           key={key}
+          type="button"
           onClick={() => onChange(key)}
           className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
             selected === key

@@ -1,1 +1,1 @@
-export { seaq, type SeaqOptions, type SeaqResult, type SeaqMatch } from './Seaq';
+export { type SeaqMatch, type SeaqOptions, type SeaqResult, seaq } from './Seaq';

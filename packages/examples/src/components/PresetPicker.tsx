@@ -56,10 +56,13 @@ interface PresetPickerProps {
 export function PresetPicker({ onSelect, active }: PresetPickerProps) {
   return (
     <div className="flex flex-wrap gap-2">
-      <span className="self-center text-sm font-medium text-gray-500 dark:text-gray-400">Presets:</span>
+      <span className="self-center text-sm font-medium text-gray-500 dark:text-gray-400">
+        Presets:
+      </span>
       {presets.map((preset) => (
         <button
           key={preset.label}
+          type="button"
           onClick={() => onSelect(preset)}
           title={preset.description}
           className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
