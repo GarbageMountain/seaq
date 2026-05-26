@@ -1,7 +1,7 @@
 {
   "name": "seaq-monorepo",
   "private": true,
-  "version": "2.0.0-rc.1",
+  "version": "2.0.0-rc.2",
   "packageManager": "yarn@4.12.0",
   "workspaces": [
     "packages/*"
@@ -17,7 +17,11 @@
     "ts-check": "tsc --build --incremental",
     "dev": "yarn workspace seaq build && (yarn workspace seaq dev & yarn workspace @seaq/examples dev & wait)",
     "clean": "rm -rf .tsc-out packages/*/dist",
-    "bench:save": "yarn workspace seaq bench:save"
+    "bench:save": "yarn workspace seaq bench:save",
+    "release:verify": "yarn ts-check && yarn check && yarn test && yarn build",
+    "release:pack": "cd packages/core && cp ../../README.md README.md && npm pack --dry-run; rm -f README.md",
+    "release:publish:next": "yarn release:verify && cd packages/core && npm publish --access public --tag next",
+    "release:publish:latest": "yarn release:verify && cd packages/core && npm publish --access public --tag latest"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",
