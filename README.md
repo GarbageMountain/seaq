@@ -161,7 +161,7 @@ interface SeaqMatch {
 - You only search flat string arrays and need maximum throughput -- uFuzzy is purpose-built for this
 - You need features like stemming, stopwords, or boolean queries -- Lunr and MiniSearch have full-text search capabilities that seaq does not
 
-For benchmark methodology and detailed performance numbers, see [BENCHMARKS.md](./BENCHMARKS.md).
+For benchmark methodology and detailed performance numbers, see [BENCHMARKS.md](https://github.com/garbagemountain/seaq/blob/master/BENCHMARKS.md).
 
 ## License
 

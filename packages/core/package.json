@@ -6,7 +6,8 @@
   "author": "Stephen Laughton",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/stephenlaughton/seaq.git"
+    "url": "git+https://github.com/garbagemountain/seaq.git",
+    "directory": "packages/core"
   },
   "keywords": [
     "search",
@@ -16,9 +17,9 @@
     "filter"
   ],
   "bugs": {
-    "url": "https://github.com/stephenlaughton/seaq/issues"
+    "url": "https://github.com/garbagemountain/seaq/issues"
   },
-  "homepage": "https://github.com/stephenlaughton/seaq#readme",
+  "homepage": "https://github.com/garbagemountain/seaq#readme",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -46,7 +47,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "benchmark": "vitest bench",
-    "bench:save": "vitest bench --outputJson benchmarks/$(git rev-parse --short HEAD).json"
+    "bench:save": "vitest bench --outputJson benchmarks/$(git rev-parse --short HEAD).json",
+    "prepublishOnly": "cp ../../README.md README.md",
+    "postpublish": "rm -f README.md"
   },
   "devDependencies": {
     "@leeoniya/ufuzzy": "^1.0.19",
