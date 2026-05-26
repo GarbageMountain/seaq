@@ -26,6 +26,3 @@ coverage
 
 # Misc
 packages/core/benchmarks/*.json
-
-# Copied at publish time by packages/core prepublishOnly
-packages/core/README.md

@@ -47,9 +47,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "benchmark": "vitest bench",
-    "bench:save": "vitest bench --outputJson benchmarks/$(git rev-parse --short HEAD).json",
-    "prepublishOnly": "cp ../../README.md README.md",
-    "postpublish": "rm -f README.md"
+    "bench:save": "vitest bench --outputJson benchmarks/$(git rev-parse --short HEAD).json"
   },
   "devDependencies": {
     "@leeoniya/ufuzzy": "^1.0.19",

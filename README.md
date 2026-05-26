@@ -1,167 +1,70 @@
 # seaq
 
-Zero-dependency fuzzy search. One function, no index, no setup.
+[![npm](https://img.shields.io/npm/v/seaq?label=npm)](https://www.npmjs.com/package/seaq)
+
+Zero-dependency fuzzy search for JavaScript and TypeScript. One function, no index, no setup. Works the same whether your list has 20 items or 20,000.
 
 ```typescript
 import { seaq } from 'seaq';
 
-const results = seaq(contacts, 'john', { keys: ['name', 'email'] });
+seaq(contacts, 'john', { keys: ['name', 'email'] });
 ```
 
-Works the same whether your list has 20 items or 20,000 -- no refactoring needed.
+For installation, usage, and the full API see **[`packages/core/README.md`](./packages/core/README.md)** — that's also what ships on npm.
 
-## Install
+## Repo layout
+
+This is a yarn workspaces monorepo.
+
+| Package | Description |
+|---------|-------------|
+| [`packages/core`](./packages/core) | The published `seaq` library. |
+| [`packages/test-data`](./packages/test-data) | Shared fixtures (contacts, cities, books) consumed by tests and the examples app. Not published. |
+| [`packages/examples`](./packages/examples) | Interactive Vite + React site comparing seaq against Fuse.js, MiniSearch, uFuzzy, and Lunr across real datasets. |
+
+Other docs:
+
+- [BENCHMARKS.md](./BENCHMARKS.md) — performance methodology and numbers
+- [WHY-SEAQ.md](./WHY-SEAQ.md) — when seaq is the right tool (and when it isn't)
+
+## Development
+
+Prerequisites: Node 22+, yarn 4 (managed via `packageManager` in `package.json`).
 
 ```bash
-npm install seaq
+yarn install
+yarn build          # build all packages
+yarn test           # run all tests
+yarn ts-check       # type-check the whole repo
+yarn check          # biome lint
+yarn dev            # build core in watch mode + run examples site
 ```
 
-## Usage
+Benchmarks live in `packages/core/test/perf`:
 
-### Search objects by key
-
-```typescript
-const contacts = [
-  { name: 'John Smith', email: 'john@example.com' },
-  { name: 'Jane Doe', email: 'jane@test.com' },
-];
-
-seaq(contacts, 'jo', { keys: ['name', 'email'] });
-// => [{ name: 'John Smith', ... }]
+```bash
+yarn workspace seaq benchmark
+yarn bench:save     # save benchmark JSON keyed by commit short SHA
 ```
 
-### Nested objects (dot notation)
+## Releasing
 
-```typescript
-const users = [
-  { name: 'Alice', address: { city: 'New York' } },
-  { name: 'Bob', address: { city: 'Los Angeles' } },
-];
+Manual, run from a clean working tree:
 
-seaq(users, 'new york', { keys: ['address.city'] });
+```bash
+# 1. Bump version in root package.json and packages/core/package.json
+# 2. Commit the bump
+# 3. Inspect what will be published
+yarn release:pack
+
+# 4. Publish
+yarn release:publish:next     # prereleases (rc, beta, alpha) -> npm 'next' tag
+yarn release:publish:latest   # stable releases -> npm 'latest' tag
 ```
 
-### Array traversal
+`release:publish:*` runs `release:verify` first (ts-check + lint + test + build) and then `npm publish --access public --tag <tag>` from `packages/core`.
 
-Dot notation walks into arrays automatically. Given `emails` is an array of objects, `'emails.address'` searches every element:
-
-```typescript
-const people = [
-  { name: 'Charlie', emails: [{ address: 'charlie@work.com' }, { address: 'charlie@home.com' }] },
-];
-
-seaq(people, 'work.com', { keys: ['emails.address'] });
-```
-
-### Plain string arrays
-
-No `keys` needed when searching strings directly:
-
-```typescript
-seaq(['apple', 'banana', 'orange'], 'app');
-// => ['apple']
-```
-
-### Acronym matching
-
-seaq gives bonus score to acronym matches -- useful for searching names, locations, and abbreviations:
-
-```typescript
-seaq(['Hillsdale Michigan', 'Historical Museum'], 'HiMi');
-// => ['Hillsdale Michigan', 'Historical Museum']  (Hillsdale ranked first)
-```
-
-### Cross-field matching
-
-The default `joined` field mode concatenates field values before scoring, so queries can span fields:
-
-```typescript
-seaq(contacts, 'john smith', { keys: ['firstName', 'lastName'] });
-// Matches even though "john" is in firstName and "smith" is in lastName
-```
-
-### Match highlighting
-
-Set `includeMatches: true` to get character-level match positions for building highlighted search results:
-
-```typescript
-const results = seaq(contacts, 'john', {
-  keys: ['name'],
-  includeMatches: true,
-});
-// => [{ item: { name: 'John Smith', ... }, score: 0.89, matches: [{ key: 'name', value: 'John Smith', indices: [[0, 3]], score: 0.89 }] }]
-```
-
-## API
-
-```typescript
-seaq<T>(list: T[], query: string, options?: SeaqOptions<T>): T[]
-seaq<T>(list: T[], query: string, options: SeaqOptions<T> & { includeMatches: true }): SeaqResult<T>[]
-```
-
-Returns a new array of matching items sorted by relevance (highest score first). The original array is never mutated. An empty query returns `[]`.
-
-### Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `keys` | `string[]` | -- | Fields to search. Supports dot notation for nested properties (`'address.city'`) and automatic array traversal (`'emails.address'`). Omit when searching a plain `string[]`. |
-| `fuzziness` | `number` | `0.2` | Typo tolerance from 0 to 1. `0` = strict (every character must match). `0.2` = light tolerance. `0.5` = moderate. `0.8`+ = very loose. |
-| `fieldMode` | `'joined' \| 'separate'` | `'joined'` | `'joined'` concatenates all field values into one string before scoring -- supports cross-field queries like "john smith" matching firstName + lastName. `'separate'` scores each field independently and takes the best. |
-| `limit` | `number` | `10` | Maximum results to return. Uses a min-heap internally for O(n log k) selection, faster than full-sorting then slicing. Set to `Infinity` to return all matches. |
-| `threshold` | `number` | `0.3` | Relative score cutoff. Results scoring below `topScore * threshold` are dropped. `0` = no filtering (return everything with score > 0). `1` = only near-perfect matches. |
-| `includeMatches` | `boolean` | `false` | When `true`, returns `SeaqResult<T>` objects with match metadata (character positions, matched value, per-match score) instead of plain items. |
-
-### Types
-
-```typescript
-interface SeaqResult<T> {
-  item: T;
-  score: number;
-  matches: SeaqMatch[];
-}
-
-interface SeaqMatch {
-  key?: string;      // Field key (separate mode only; undefined for string/joined)
-  value: string;     // The string that was scored
-  indices: [number, number][];  // Highlight ranges as [start, end] pairs (inclusive)
-  score: number;     // Score for this specific match
-}
-```
-
-## Feature comparison
-
-| Feature | seaq | fuse.js | minisearch | ufuzzy | lunr |
-|---------|:----:|:-------:|:----------:|:------:|:----:|
-| Exact match | yes | yes | yes | yes | yes |
-| Fuzzy/typo tolerance | yes | yes | partial | yes | partial |
-| Partial/prefix match | yes | yes | yes | yes | yes |
-| Acronym bonus | **yes** | weak | no | no | no |
-| Nested object access | **yes** | yes | no | no | no |
-| Array field traversal | **yes** | partial | no | no | no |
-| Cross-field matching | **yes** | no | no | no | no |
-| Match highlighting | yes | yes | yes | yes | no |
-| Pre-built index | no | yes | yes | no | yes |
-| Zero dependencies | yes | yes | yes | yes | yes |
-
-## When to use seaq
-
-**seaq is a good fit when:**
-
-- Your list is dynamic -- data changes each render, so index-based libs waste time rebuilding
-- You need to search nested objects or arrays without manual flattening
-- Acronym matching matters (e.g., "NYC" matching "New York City")
-- You want zero setup -- no constructor, no addAll, no index step; one function call
-- Cold-start performance matters -- seaq has no index overhead, so the first search is fast
-- Your list size is unpredictable -- works from 20 items to 20,000 without API changes
-
-**Consider alternatives when:**
-
-- You repeatedly search a large static dataset (10K+ items) -- MiniSearch and Lunr amortize their index cost across many searches and will be significantly faster after the first query
-- You only search flat string arrays and need maximum throughput -- uFuzzy is purpose-built for this
-- You need features like stemming, stopwords, or boolean queries -- Lunr and MiniSearch have full-text search capabilities that seaq does not
-
-For benchmark methodology and detailed performance numbers, see [BENCHMARKS.md](https://github.com/garbagemountain/seaq/blob/master/BENCHMARKS.md).
+A GitHub Actions release workflow (`.github/workflows/release.yml`) is also available via workflow_dispatch.
 
 ## License
 
