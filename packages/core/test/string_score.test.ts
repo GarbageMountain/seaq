@@ -10,6 +10,17 @@ describe('string_score', () => {
     test('empty query returns 0', () => {
       expect(string_score('hello', '')).toBe(0);
     });
+
+    test('empty target returns 0', () => {
+      expect(string_score('', 'abc')).toBe(0);
+      expect(string_score('', 'abc', 0.5)).toBe(0);
+    });
+
+    test('exact match fills positions with the full range', () => {
+      const positions: number[] = [];
+      expect(string_score('abc', 'abc', 0, undefined, positions)).toBe(1);
+      expect(positions).toEqual([0, 1, 2]);
+    });
   });
 
   describe('partial matches', () => {

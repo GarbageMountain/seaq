@@ -58,6 +58,16 @@ describe('getProperty', () => {
     test('missing key returns empty', () => {
       expect(getProperty(testObj, 'nothing')).toEqual([]);
     });
+
+    test('null object with a path returns empty', () => {
+      expect(getProperty(null, 'name')).toEqual([]);
+      expect(getProperty(undefined, 'a.b')).toEqual([]);
+    });
+
+    test('null entries inside traversed arrays are skipped', () => {
+      const obj = { tags: [null, { name: 'admin' }, undefined] };
+      expect(getProperty(obj, 'tags.name')).toEqual(['admin']);
+    });
   });
 
   describe('dot notation (nested objects)', () => {

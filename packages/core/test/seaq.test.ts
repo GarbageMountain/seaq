@@ -287,10 +287,11 @@ describe('includeMatches', () => {
     });
     expect(results).toHaveLength(1);
     expect(results[0].item).toEqual({ firstName: 'John', lastName: 'Smith' });
+    // Joined mode returns per-field matches with key set and field-relative indices
     expect(results[0].matches).toHaveLength(1);
-    // Joined mode: value is the concatenated string
-    expect(results[0].matches[0].value).toBe('John Smith');
-    expect(results[0].matches[0].key).toBeUndefined();
+    expect(results[0].matches[0].key).toBe('firstName');
+    expect(results[0].matches[0].value).toBe('John');
+    expect(results[0].matches[0].indices).toEqual([[0, 3]]);
   });
 
   test('object with keys — separate mode includes key', () => {
@@ -982,11 +983,25 @@ describe('charMask', () => {
     expect(charMask('z')).toBe(1 << 25);
   });
 
-  test('non-alpha chars set bit 26', () => {
-    expect(charMask('1')).toBe(1 << 26);
+  test('non-alphanumeric chars set bit 26', () => {
     expect(charMask(' ')).toBe(1 << 26);
     expect(charMask('_')).toBe(1 << 26);
     expect(charMask('@')).toBe(1 << 26);
+  });
+
+  test('digits set bucketed bits 27-31 (pairs)', () => {
+    expect(charMask('0')).toBe(1 << 27);
+    expect(charMask('1')).toBe(1 << 27);
+    expect(charMask('2')).toBe(1 << 28);
+    expect(charMask('3')).toBe(1 << 28);
+    expect(charMask('4')).toBe(1 << 29);
+    expect(charMask('5')).toBe(1 << 29);
+    expect(charMask('6')).toBe(1 << 30);
+    expect(charMask('7')).toBe(1 << 30);
+    expect(charMask('8')).toBe(1 << 31);
+    expect(charMask('9')).toBe(1 << 31);
+    // digits give selectivity: '19' and '28' occupy different buckets
+    expect(charMask('19') & ~charMask('28')).not.toBe(0);
   });
 
   test('repeated chars are idempotent', () => {
@@ -1007,7 +1022,7 @@ describe('charMask', () => {
     const mask = charMask('a1b');
     expect(mask & (1 << 0)).not.toBe(0); // 'a'
     expect(mask & (1 << 1)).not.toBe(0); // 'b'
-    expect(mask & (1 << 26)).not.toBe(0); // '1'
+    expect(mask & (1 << 27)).not.toBe(0); // '1' (digit bucket 0-1)
   });
 });
 

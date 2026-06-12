@@ -7,13 +7,21 @@ import { string_score } from './string_score';
  * Match metadata for a single scored field.
  */
 export interface SeaqMatch {
-  /** Field key (separate mode only; undefined for string/joined). */
+  /**
+   * Field key this match belongs to. Set in both `separate` and `joined`
+   * modes; `undefined` when searching plain string/number arrays or keyless
+   * objects.
+   */
   key?: string;
-  /** The string that was scored. */
+  /** The field value that was scored. `indices` are relative to this string. */
   value: string;
   /** Highlight ranges as `[start, end]` pairs (inclusive). */
   indices: [number, number][];
-  /** Score for this specific match. */
+  /**
+   * Score for this specific match. In `separate` mode this is the per-field
+   * score; in `joined` mode fields are scored together as one string, so each
+   * match carries the overall item score.
+   */
   score: number;
 }
 
@@ -39,11 +47,14 @@ export interface SeaqOptions<T> {
    * - Dot notation for nested properties: `['address.city']`
    * - Automatic array traversal: `['tags.name']` walks into arrays at any level
    *
-   * Omit when searching a plain `string[]`.
+   * Omit when searching a plain `string[]`. Without `keys`, non-string items
+   * are matched against their JSON representation (numbers against their
+   * string form); `null` and `undefined` items never match.
    */
   keys?: Array<Extract<keyof T, string>> | string[];
   /**
-   * Fuzziness tolerance for typos, from 0 to 1.
+   * Fuzziness tolerance for typos, from 0 to 1. Values outside that range
+   * are clamped.
    *
    * - `0.2` (default) — light tolerance, catches minor typos like "jonh" → "john"
    * - `0` — strict mode, every character must match somewhere
@@ -53,10 +64,12 @@ export interface SeaqOptions<T> {
   fuzziness?: number;
   /**
    * How multi-field scoring works when multiple `keys` are provided.
+   * Ignored when searching a plain `string[]` (no `keys`).
    *
-   * - `'joined'` (default) — concatenates all field values into one string before scoring.
-   *   Supports cross-field queries like "john smith" matching firstName="John" + lastName="Smith",
-   *   and concatenated prefixes like "helgre" matching "Helen Green".
+   * - `'joined'` (default) — concatenates all field values (space-separated)
+   *   into one string before scoring. Supports cross-field queries like
+   *   "john smith" matching firstName="John" + lastName="Smith", and
+   *   concatenated prefixes like "helgre" matching "Helen Green".
    * - `'separate'` — scores each field independently and takes the best match.
    *   More precise for single-field queries but cannot match across field boundaries.
    */
@@ -69,6 +82,7 @@ export interface SeaqOptions<T> {
    * everything and calling `.slice(0, n)` on large result sets.
    *
    * Set to `Infinity` to return all matches (not recommended for large lists).
+   * `0` or a negative limit returns `[]`.
    */
   limit?: number;
   /**
@@ -77,22 +91,43 @@ export interface SeaqOptions<T> {
    * - `0.3` (default) — keeps results scoring at least 30% of the best match
    * - `0` — no filtering, returns everything with score > 0 (old behavior)
    * - `1` — only perfect/near-perfect matches
+   *
+   * Note: higher = stricter. This is the opposite polarity of Fuse.js's
+   * `threshold`, where lower values are stricter.
    */
   threshold?: number;
   /**
    * When `true`, returns {@link SeaqResult} objects with match metadata
    * (character positions, matched value, score) instead of plain items.
    * Useful for building search-result highlighting.
+   *
+   * Matches are per field value in both field modes: each entry has `key`
+   * set and `indices` relative to that field's `value`. Match positions are
+   * only computed for the final (post-limit) results, so this adds near-zero
+   * cost to the scoring phase.
    */
   includeMatches?: boolean;
+  /**
+   * When `true`, caches the prepared search strings (joined/lowercased
+   * values and character masks) per item, keyed on object identity via a
+   * `WeakMap`. Subsequent searches over the same item objects skip all
+   * field extraction and lowercasing — a large win for repeated searches
+   * (e.g. typeahead) over a static list.
+   *
+   * Only applies when `keys` are provided and items are objects. The cache
+   * assumes items are immutable: if you mutate an item in place, its cached
+   * entry goes stale (replace the object instead). Entries are garbage
+   * collected with the items themselves.
+   */
+  cache?: boolean;
 }
 
 /**
  * Fuzzy search an array of items, returning matches sorted by relevance.
  *
- * Items with a score of 0 (no match) are filtered out. The remaining items
- * are sorted highest-score-first and returned as a new array (the original
- * is never mutated).
+ * Items with a score of 0 (no match) are filtered out, as are `null` and
+ * `undefined` entries. The remaining items are sorted highest-score-first
+ * and returned as a new array (the original is never mutated).
  *
  * @param list - Array of objects or strings to search
  * @param query - Search query string. Empty string returns `[]`.
@@ -100,7 +135,7 @@ export interface SeaqOptions<T> {
  * @returns Filtered and sorted array of matching items
  *
  * @example
- * // Search objects by specific keys (separate mode + fuzziness 0.2 by default)
+ * // Search objects by specific keys (joined mode + fuzziness 0.2 by default)
  * seaq(contacts, 'john', { keys: ['name', 'email'] })
  *
  * @example
@@ -120,8 +155,12 @@ export interface SeaqOptions<T> {
  * seaq(users, 'admin', { keys: ['roles.name'] })
  *
  * @example
- * // Get only top 10 results efficiently
- * seaq(contacts, 'john', { keys: ['name'], limit: 10 })
+ * // Tighter cap than the default limit of 10
+ * seaq(contacts, 'john', { keys: ['name'], limit: 3 })
+ *
+ * @example
+ * // Repeated searches over a static list (typeahead) — enable the cache
+ * seaq(contacts, 'john', { keys: ['name'], cache: true })
  *
  * @example
  * // Search a plain string array (no keys needed)
@@ -139,37 +178,48 @@ export function seaq<T>(
   options?: SeaqOptions<T>,
 ): Array<T> | SeaqResult<T>[] {
   const keys = options?.keys as string[] | undefined;
-  const fuzziness = options?.fuzziness === undefined ? 0.2 : options.fuzziness;
+  const rawFuzziness = options?.fuzziness === undefined ? 0.2 : options.fuzziness;
+  // Clamp to the documented [0, 1] range — fuzziness > 1 would flip the
+  // miss penalty into a score bonus inside string_score
+  const fuzziness = rawFuzziness < 0 ? 0 : rawFuzziness > 1 ? 1 : rawFuzziness;
   const fieldMode = options?.fieldMode ?? 'joined';
   const limit = options?.limit ?? 10;
   const threshold = options?.threshold ?? 0.3;
   const includeMatches = options?.includeMatches ?? false;
+  const useCache = options?.cache ?? false;
 
   if (!query.trim()) return [];
+  if (limit <= 0) return [];
+
+  // Split dot-notation paths once per call instead of per segment per item
+  const keyPaths = keys?.map((k) => k.split('.'));
 
   const { items: scored, maxScore } = scoreItems(
     list,
     query,
     keys,
+    keyPaths,
     fuzziness,
     fieldMode,
     includeMatches,
+    useCache,
   );
 
   const cutoff = maxScore * threshold;
-  const filtered = cutoff > 0 ? scored.filter((m) => m.score >= cutoff) : scored;
 
   let sorted: Array<MetaDataItem<T>>;
-  if (limit !== undefined && limit > 0 && Number.isFinite(limit)) {
-    sorted = getTopN(filtered, limit);
+  if (Number.isFinite(limit)) {
+    sorted = getTopN(scored, limit, cutoff);
   } else {
+    const filtered = cutoff > 0 ? scored.filter((m) => m.score >= cutoff) : scored;
     sorted = filtered.sort((a, b) => b.score - a.score);
   }
 
   if (includeMatches) {
-    // Rescore finalists to compute match positions (deferred from scoring phase)
-    rescoreWithPositions(sorted, query, keys, fuzziness, fieldMode);
-    // biome-ignore lint/style/noNonNullAssertion: matches is guaranteed set: separate-mode populates via rescoreWithPositions; other paths set matches inside `if (score > 0)` and sorted only contains score > 0 items
+    // Match positions are computed only for the finalists (deferred from the
+    // scoring phase) — scoring never pays for position collection
+    computeMatches(sorted, query, keys, keyPaths, fuzziness, fieldMode);
+    // biome-ignore lint/style/noNonNullAssertion: computeMatches sets matches on every finalist
     return sorted.map((m) => ({ item: m.item, score: m.score, matches: m.matches! }));
   }
   return sorted.map((m) => m.item);
@@ -178,11 +228,17 @@ export function seaq<T>(
 /**
  * Get top N items by score using a min-heap for efficiency.
  * O(n log k) instead of O(n log n) for full sort.
+ * Items scoring below `cutoff` are skipped without entering the heap.
  */
-function getTopN<T>(items: Array<MetaDataItem<T>>, n: number): Array<MetaDataItem<T>> {
+function getTopN<T>(
+  items: Array<MetaDataItem<T>>,
+  n: number,
+  cutoff: number,
+): Array<MetaDataItem<T>> {
   if (items.length <= n) {
-    // If we have fewer items than limit, just sort them all
-    return items.sort((a, b) => b.score - a.score);
+    // If we have fewer items than limit, just filter and sort them all
+    const eligible = cutoff > 0 ? items.filter((m) => m.score >= cutoff) : items;
+    return eligible.sort((a, b) => b.score - a.score);
   }
 
   // Use a min-heap to track top N items
@@ -190,6 +246,7 @@ function getTopN<T>(items: Array<MetaDataItem<T>>, n: number): Array<MetaDataIte
   const heap: Array<MetaDataItem<T>> = [];
 
   for (const item of items) {
+    if (item.score < cutoff) continue;
     if (heap.length < n) {
       // Heap not full yet, add item
       heapPush(heap, item);
@@ -217,8 +274,11 @@ function heapPush<T>(heap: Array<MetaDataItem<T>>, item: MetaDataItem<T>): void 
     const parent = Math.floor((i - 1) / 2);
     // biome-ignore lint/style/noNonNullAssertion: heap[i] and heap[parent] in-bounds (i < heap.length, parent = floor((i-1)/2) >= 0); hot path
     if (heap[i]!.score >= heap[parent]!.score) break;
-    // biome-ignore lint/style/noNonNullAssertion: same in-bounds guarantee as above; tuple swap
-    [heap[i], heap[parent]] = [heap[parent]!, heap[i]!];
+    // biome-ignore lint/style/noNonNullAssertion: same in-bounds guarantee as above
+    const tmp = heap[i]!;
+    // biome-ignore lint/style/noNonNullAssertion: same in-bounds guarantee as above
+    heap[i] = heap[parent]!;
+    heap[parent] = tmp;
     i = parent;
   }
 }
@@ -258,15 +318,22 @@ function heapifyDown<T>(heap: Array<MetaDataItem<T>>, i: number): void {
     if (smallest === i) break;
 
     // biome-ignore lint/style/noNonNullAssertion: i and smallest both in-bounds by guards above
-    [heap[i], heap[smallest]] = [heap[smallest]!, heap[i]!];
+    const tmp = heap[i]!;
+    // biome-ignore lint/style/noNonNullAssertion: i and smallest both in-bounds by guards above
+    heap[i] = heap[smallest]!;
+    heap[smallest] = tmp;
     i = smallest;
   }
 }
 
+/**
+ * Collapse ascending match positions into inclusive [start, end] ranges.
+ * Precondition: `positions` is non-empty — every caller only rescores
+ * strings that already scored > 0, which implies at least one position.
+ */
 function positionsToRanges(positions: number[]): [number, number][] {
-  if (positions.length === 0) return [];
   const ranges: [number, number][] = [];
-  // biome-ignore lint/style/noNonNullAssertion: positions.length > 0 verified above
+  // biome-ignore lint/style/noNonNullAssertion: non-empty by precondition
   let start = positions[0]!;
   let end = start;
   for (let i = 1; i < positions.length; i++) {
@@ -284,77 +351,216 @@ function positionsToRanges(positions: number[]): [number, number][] {
   return ranges;
 }
 
-function rescoreWithPositions<T>(
+/** A field value's location within a joined search string. */
+interface JoinedSegment {
+  key: string;
+  value: string;
+  start: number;
+}
+
+/**
+ * Build the joined search string for an item: every leaf value from every
+ * key, space-separated, in key order.
+ */
+function buildJoinedString(item: unknown, keyPaths: string[][]): string {
+  const acc: string[] = [];
+  for (let k = 0; k < keyPaths.length; k++) {
+    // biome-ignore lint/style/noNonNullAssertion: k < keyPaths.length by loop guard
+    collectValues(item, keyPaths[k]!, 0, acc);
+  }
+  return acc.join(' ');
+}
+
+/**
+ * Build the joined search string along with the segment table needed to map
+ * match positions back to individual fields. Only called for finalists.
+ */
+function buildJoinedSegments(
+  item: unknown,
+  keys: string[],
+  keyPaths: string[][],
+): { joined: string; segments: JoinedSegment[] } {
+  const acc: string[] = [];
+  const segments: JoinedSegment[] = [];
+  for (let k = 0; k < keyPaths.length; k++) {
+    const before = acc.length;
+    // biome-ignore lint/style/noNonNullAssertion: k < keyPaths.length by loop guard
+    collectValues(item, keyPaths[k]!, 0, acc);
+    for (let i = before; i < acc.length; i++) {
+      // biome-ignore lint/style/noNonNullAssertion: keys and keyPaths are parallel; values pushed by collectValues are defined
+      segments.push({ key: keys[k]!, value: acc[i]!, start: 0 });
+    }
+  }
+  let offset = 0;
+  for (const seg of segments) {
+    seg.start = offset;
+    offset += seg.value.length + 1; // +1 for the ' ' separator
+  }
+  return { joined: acc.join(' '), segments };
+}
+
+/**
+ * Split match positions on a joined string into per-field {@link SeaqMatch}
+ * entries with field-relative indices. Positions landing on the space
+ * separators between fields are dropped.
+ */
+function mapPositionsToSegments(
+  positions: number[],
+  segments: JoinedSegment[],
+  score: number,
+): SeaqMatch[] {
+  const matches: SeaqMatch[] = [];
+  let segIdx = 0;
+  let segPositions: number[] = [];
+
+  const flush = (seg: JoinedSegment): void => {
+    if (segPositions.length > 0) {
+      matches.push({
+        key: seg.key,
+        value: seg.value,
+        indices: positionsToRanges(segPositions),
+        score,
+      });
+      segPositions = [];
+    }
+  };
+
+  // Invariant: positions are strictly ascending (string_score always
+  // advances) and every position is < joined.length, while the segments
+  // cover the joined string end to end — so segIdx can never run past the
+  // last segment while positions remain.
+  for (const p of positions) {
+    // biome-ignore lint/style/noNonNullAssertion: see invariant above
+    while (p >= segments[segIdx]!.start + segments[segIdx]!.value.length) {
+      // biome-ignore lint/style/noNonNullAssertion: see invariant above
+      flush(segments[segIdx]!);
+      segIdx++;
+    }
+    // biome-ignore lint/style/noNonNullAssertion: see invariant above
+    const seg = segments[segIdx]!;
+    if (p < seg.start) continue; // separator between fields
+    segPositions.push(p - seg.start);
+  }
+  // biome-ignore lint/style/noNonNullAssertion: flush only dereferences seg when positions were collected, which implies segments[segIdx] exists
+  flush(segments[segIdx]!);
+  return matches;
+}
+
+/**
+ * Compute match metadata for the finalists. Scoring runs without position
+ * collection; this re-scores only the (≤ limit) surviving items with
+ * positions enabled and reconstructs the strings they were scored against.
+ */
+function computeMatches<T>(
   items: MetaDataItem<T>[],
   query: string,
   keys: string[] | undefined,
+  keyPaths: string[][] | undefined,
   fuzziness: number | undefined,
   fieldMode: 'joined' | 'separate',
 ): void {
-  // _winDesc is only set in separate mode with keys; bail otherwise
-  if (!keys) return;
-
   const lowerQuery = query.toLowerCase();
   const tokens =
-    fieldMode === 'separate' && query.includes(' ') ? query.split(/\s+/).filter(Boolean) : null;
+    fieldMode === 'separate' && keys && query.includes(' ')
+      ? query.split(/\s+/).filter(Boolean)
+      : null;
   const lowerTokens = tokens?.map((t) => t.toLowerCase()) ?? null;
 
   for (const meta of items) {
-    // Items without _winDesc already have matches computed (non-separate paths)
-    if (!meta._winDesc) continue;
+    if (keys && keyPaths) {
+      if (meta._winDesc) {
+        // Separate mode: rescore the recorded winning field(s)
+        const desc = meta._winDesc;
+        const fieldValues = keys.map((key, ki) => ({
+          key,
+          // biome-ignore lint/style/noNonNullAssertion: keys and keyPaths are parallel arrays
+          values: collectValues(meta.item, keyPaths[ki]!, 0, []),
+        }));
 
-    const desc = meta._winDesc;
-    const fieldValues = keys.map((key) => ({ key, values: getProperty(meta.item, key) }));
-
-    if (desc.path === 'A') {
-      // biome-ignore lint/style/noNonNullAssertion: desc.fieldIdx was set from a valid in-bounds index during scoring
-      const field = fieldValues[desc.fieldIdx]!;
-      // biome-ignore lint/style/noNonNullAssertion: desc.valueIdx was set from a valid in-bounds index during scoring
-      const value = field.values[desc.valueIdx]!;
-      const positions: number[] = [];
-      const s = string_score(value, query, fuzziness, lowerQuery, positions);
-      meta.matches = [{ key: field.key, value, indices: positionsToRanges(positions), score: s }];
-    } else {
-      // Path B: rescore each token against its winning field.
-      // tokens/lowerTokens are guaranteed non-null here: desc.path === 'B' is only set
-      // when scoreItems Path B fired, which required tokens && lowerTokens; the same
-      // construction conditions hold here after the `if (!keys) return` early bail.
-      // biome-ignore lint/style/noNonNullAssertion: see invariant above
-      const tks = tokens!;
-      // biome-ignore lint/style/noNonNullAssertion: see invariant above
-      const ltks = lowerTokens!;
-      const tokenMatches: SeaqMatch[] = [];
-      for (let t = 0; t < desc.fieldIndices.length; t++) {
-        // biome-ignore lint/style/noNonNullAssertion: t < desc.fieldIndices.length by loop guard
-        const { fieldIdx, valueIdx } = desc.fieldIndices[t]!;
-        // biome-ignore lint/style/noNonNullAssertion: fieldIdx recorded as valid in-bounds index during scoring
-        const field = fieldValues[fieldIdx]!;
-        // biome-ignore lint/style/noNonNullAssertion: valueIdx recorded as valid in-bounds index during scoring
-        const value = field.values[valueIdx]!;
+        if (desc.path === 'A') {
+          // biome-ignore lint/style/noNonNullAssertion: desc.fieldIdx was set from a valid in-bounds index during scoring
+          const field = fieldValues[desc.fieldIdx]!;
+          // biome-ignore lint/style/noNonNullAssertion: desc.valueIdx was set from a valid in-bounds index during scoring
+          const value = field.values[desc.valueIdx]!;
+          const positions: number[] = [];
+          const s = string_score(value, query, fuzziness, lowerQuery, positions);
+          meta.matches = [
+            { key: field.key, value, indices: positionsToRanges(positions), score: s },
+          ];
+        } else {
+          // Path B: rescore each token against its winning field.
+          // tokens/lowerTokens are guaranteed non-null here: desc.path === 'B' is only set
+          // when scoreItems Path B fired, which required tokens && lowerTokens; the same
+          // construction conditions hold here.
+          // biome-ignore lint/style/noNonNullAssertion: see invariant above
+          const tks = tokens!;
+          // biome-ignore lint/style/noNonNullAssertion: see invariant above
+          const ltks = lowerTokens!;
+          const tokenMatches: SeaqMatch[] = [];
+          for (let t = 0; t < desc.fieldIndices.length; t++) {
+            // biome-ignore lint/style/noNonNullAssertion: t < desc.fieldIndices.length by loop guard
+            const { fieldIdx, valueIdx } = desc.fieldIndices[t]!;
+            // biome-ignore lint/style/noNonNullAssertion: fieldIdx recorded as valid in-bounds index during scoring
+            const field = fieldValues[fieldIdx]!;
+            // biome-ignore lint/style/noNonNullAssertion: valueIdx recorded as valid in-bounds index during scoring
+            const value = field.values[valueIdx]!;
+            const positions: number[] = [];
+            // biome-ignore lint/style/noNonNullAssertion: t in-bounds; tks/ltks parallel
+            const s = string_score(value, tks[t]!, fuzziness, ltks[t]!, positions);
+            tokenMatches.push({
+              key: field.key,
+              value,
+              indices: positionsToRanges(positions),
+              score: s,
+            });
+          }
+          meta.matches = tokenMatches;
+        }
+        delete meta._winDesc;
+      } else {
+        // Joined mode: rebuild the joined string with its segment table,
+        // rescore with positions, and split them back into per-field matches
+        const { joined, segments } = buildJoinedSegments(meta.item, keys, keyPaths);
         const positions: number[] = [];
-        // biome-ignore lint/style/noNonNullAssertion: t in-bounds; tks/ltks parallel
-        const s = string_score(value, tks[t]!, fuzziness, ltks[t]!, positions);
-        tokenMatches.push({
-          key: field.key,
-          value,
-          indices: positionsToRanges(positions),
-          score: s,
-        });
+        string_score(joined, query, fuzziness, lowerQuery, positions);
+        meta.matches = mapPositionsToSegments(positions, segments, meta.score);
       }
-      meta.matches = tokenMatches;
+    } else {
+      // Keyless items: reconstruct the scored string
+      const item = meta.item;
+      const value =
+        typeof item === 'string'
+          ? item
+          : typeof item === 'number'
+            ? String(item)
+            : JSON.stringify(item);
+      const positions: number[] = [];
+      string_score(value, query, fuzziness, lowerQuery, positions);
+      meta.matches = [{ value, indices: positionsToRanges(positions), score: meta.score }];
     }
-
-    delete meta._winDesc;
   }
 }
+
+/** Prepared (lowercased/masked) search strings cached per item. */
+type PrepEntry =
+  | { joined: string; lower: string; mask: number }
+  | { fields: Array<{ key: string; values: string[]; lowerValues: string[]; masks: number[] }> };
+
+/**
+ * Cache of prepared search strings, keyed by item identity then by a
+ * fieldMode+keys signature. Lives for the lifetime of the item objects.
+ */
+const prepCache = new WeakMap<object, Map<string, PrepEntry>>();
 
 function scoreItems<T>(
   list: T[],
   query: string,
   keys: string[] | undefined,
+  keyPaths: string[][] | undefined,
   fuzziness: number | undefined,
   fieldMode: 'joined' | 'separate',
   includeMatches: boolean,
+  useCache: boolean,
 ): { items: Array<MetaDataItem<T>>; maxScore: number } {
   // Pre-lowercase query once instead of per-item
   const lowerQuery = query.toLowerCase();
@@ -369,23 +575,53 @@ function scoreItems<T>(
   const queryMask = charMask(lowerQuery);
   const tokenMasks = lowerTokens?.map((t) => charMask(t));
 
+  const cacheSig = useCache && keys ? `${fieldMode} ${keys.join(' ')}` : null;
+
   const result: Array<MetaDataItem<T>> = [];
   let maxScore = 0;
 
   for (const item of list) {
+    // null/undefined entries (sparse arrays, optional data) never match
+    if (item === null || item === undefined) continue;
+
     let score: number;
-    let matches: SeaqMatch[] | undefined;
     let winDesc: WinDescriptor | undefined;
 
-    if (keys) {
+    // Per-item prep cache lookup (object items only — WeakMap keys)
+    let itemMap: Map<string, PrepEntry> | undefined;
+    let cachedPrep: PrepEntry | undefined;
+    if (cacheSig && typeof item === 'object') {
+      itemMap = prepCache.get(item);
+      if (itemMap) {
+        cachedPrep = itemMap.get(cacheSig);
+      } else {
+        itemMap = new Map();
+        prepCache.set(item, itemMap);
+      }
+    }
+
+    if (keys && keyPaths) {
       if (fieldMode === 'separate') {
-        // Cache field values + lowercased versions + char masks once per item
-        const fieldValues = keys.map((key) => {
-          const values = getProperty(item, key);
-          const lowerValues = values.map((v) => v.toLowerCase());
-          const masks = lowerValues.map((lv) => charMask(lv));
-          return { key, values, lowerValues, masks };
-        });
+        // Field values + lowercased versions + char masks, cached per item
+        // when the cache is enabled, otherwise computed once per item
+        let fieldValues: Array<{
+          key: string;
+          values: string[];
+          lowerValues: string[];
+          masks: number[];
+        }>;
+        if (cachedPrep && 'fields' in cachedPrep) {
+          fieldValues = cachedPrep.fields;
+        } else {
+          fieldValues = keys.map((key, ki) => {
+            // biome-ignore lint/style/noNonNullAssertion: keys and keyPaths are parallel arrays
+            const values = collectValues(item, keyPaths[ki]!, 0, []);
+            const lowerValues = values.map((v) => v.toLowerCase());
+            const masks = lowerValues.map((lv) => charMask(lv));
+            return { key, values, lowerValues, masks };
+          });
+          if (itemMap && cacheSig) itemMap.set(cacheSig, { fields: fieldValues });
+        }
 
         // Path A: score full query against each field, take best
         let bestScore = 0;
@@ -522,49 +758,48 @@ function scoreItems<T>(
           winDesc = { path: 'A', fieldIdx: winFieldIdx, valueIdx: winValueIdx };
         }
       } else {
-        // Join all field values and score as one string.
-        // TODO: consider returning per-field indices for joined mode to make
-        // highlighting easier for consumers. Currently indices are relative to
-        // the joined string so callers have to reverse-map them back to
-        // individual fields. Need to evaluate whether tracking field offsets
-        // during scoring adds meaningful overhead.
-        const searchString = keys.map((key) => getProperty(item, key).join(' ')).join(' ');
-        const positions: number[] | undefined = includeMatches ? [] : undefined;
-        score = string_score(searchString, query, fuzziness, lowerQuery, positions);
-        if (includeMatches && score > 0) {
-          // biome-ignore lint/style/noNonNullAssertion: positions === [] in this branch (includeMatches is true)
-          matches = [{ value: searchString, indices: positionsToRanges(positions!), score }];
+        // Joined mode: concatenate all field values and score as one string.
+        // Match positions for includeMatches are computed later (finalists
+        // only) by computeMatches via buildJoinedSegments.
+        let searchString: string;
+        let lowerSearch: string | undefined;
+        let mask: number | undefined;
+        if (cachedPrep && 'joined' in cachedPrep) {
+          searchString = cachedPrep.joined;
+          lowerSearch = cachedPrep.lower;
+          mask = cachedPrep.mask;
+        } else {
+          searchString = buildJoinedString(item, keyPaths);
+          if (itemMap && cacheSig) {
+            lowerSearch = searchString.toLowerCase();
+            mask = charMask(lowerSearch);
+            itemMap.set(cacheSig, { joined: searchString, lower: lowerSearch, mask });
+          } else if (!fuzziness) {
+            // Strict mode: the mask gate rejects in O(len) what string_score
+            // rejects in O(query·len), so it pays for itself even uncached
+            lowerSearch = searchString.toLowerCase();
+            mask = charMask(lowerSearch);
+          }
         }
+        const rejected =
+          mask !== undefined && (!fuzziness ? (queryMask & ~mask) !== 0 : (queryMask & mask) === 0);
+        score = rejected
+          ? 0
+          : string_score(searchString, query, fuzziness, lowerQuery, undefined, lowerSearch);
       }
     } else if (typeof item === 'string') {
-      const positions: number[] | undefined = includeMatches ? [] : undefined;
-      score = string_score(item, query, fuzziness, lowerQuery, positions);
-      if (includeMatches && score > 0) {
-        // biome-ignore lint/style/noNonNullAssertion: positions === [] in this branch (includeMatches is true)
-        matches = [{ value: item, indices: positionsToRanges(positions!), score }];
-      }
+      score = string_score(item, query, fuzziness, lowerQuery);
     } else if (typeof item === 'number') {
-      const value = String(item);
-      const positions: number[] | undefined = includeMatches ? [] : undefined;
-      score = string_score(value, query, fuzziness, lowerQuery, positions);
-      if (includeMatches && score > 0) {
-        // biome-ignore lint/style/noNonNullAssertion: positions === [] in this branch (includeMatches is true)
-        matches = [{ value, indices: positionsToRanges(positions!), score }];
-      }
+      score = string_score(String(item), query, fuzziness, lowerQuery);
     } else {
-      const value = JSON.stringify(item);
-      const positions: number[] | undefined = includeMatches ? [] : undefined;
-      score = string_score(value, query, fuzziness, lowerQuery, positions);
-      if (includeMatches && score > 0) {
-        // biome-ignore lint/style/noNonNullAssertion: positions === [] in this branch (includeMatches is true)
-        matches = [{ value, indices: positionsToRanges(positions!), score }];
-      }
+      // Keyless objects are matched against their JSON representation
+      score = string_score(JSON.stringify(item), query, fuzziness, lowerQuery);
     }
 
     // Only include items with score > 0
     if (score > 0) {
       if (score > maxScore) maxScore = score;
-      const meta: MetaDataItem<T> = { item, score, matches };
+      const meta: MetaDataItem<T> = { item, score };
       if (winDesc) meta._winDesc = winDesc;
       result.push(meta);
     }
@@ -583,14 +818,25 @@ function hasSubsequence(value: string, token: string): boolean {
 }
 
 /**
- * Build a bitmask where bits 0-25 represent a-z presence, bit 26 catches everything else.
+ * Build a bitmask of the character classes present in a string:
+ * - bits 0-25: a-z presence
+ * - bits 27-31: digit presence, bucketed in pairs (0-1, 2-3, 4-5, 6-7, 8-9)
+ *   so numeric queries (phone numbers, ids) get real pre-filter selectivity
+ * - bit 26: everything else
+ *
  * Enables O(1) character-set containment checks before expensive scoring.
  */
 export function charMask(lower: string): number {
   let mask = 0;
   for (let i = 0; i < lower.length; i++) {
-    const c = lower.charCodeAt(i) - 97;
-    mask |= 1 << (c >= 0 && c < 26 ? c : 26);
+    const code = lower.charCodeAt(i);
+    if (code >= 97 && code <= 122) {
+      mask |= 1 << (code - 97);
+    } else if (code >= 48 && code <= 57) {
+      mask |= 1 << (27 + ((code - 48) >> 1));
+    } else {
+      mask |= 1 << 26;
+    }
   }
   return mask;
 }
@@ -604,6 +850,53 @@ interface MetaDataItem<T> {
   score: number;
   matches?: SeaqMatch[];
   _winDesc?: WinDescriptor;
+}
+
+/** Push the string form of a leaf value onto `list` (skips null/undefined). */
+function collectLeaf(value: unknown, list: string[]): void {
+  if (typeof value === 'string') {
+    list.push(value);
+  } else if (typeof value === 'number' || typeof value === 'boolean') {
+    list.push(String(value));
+  } else if (value !== null && value !== undefined) {
+    list.push(JSON.stringify(value));
+  }
+}
+
+/**
+ * Walk a pre-split property path, collecting all leaf values as strings.
+ * Arrays are traversed automatically at any level.
+ */
+function collectValues(obj: unknown, segments: string[], segIdx: number, list: string[]): string[] {
+  if (segIdx >= segments.length) {
+    collectLeaf(obj, list);
+    return list;
+  }
+  // Cheap null/undefined guard: indexing null/undefined throws, but primitives
+  // (string/number/etc.) safely return undefined for non-numeric keys, so we
+  // skip the typeof check and let the value guard below filter those.
+  if (obj == null) return list;
+
+  // biome-ignore lint/style/noNonNullAssertion: segIdx < segments.length by guard above
+  const value = (obj as Record<string, unknown>)[segments[segIdx]!];
+  if (value === null || value === undefined) return list;
+
+  const isLast = segIdx === segments.length - 1;
+  if (isLast && (typeof value === 'string' || typeof value === 'number')) {
+    // Fast path for primitive leaves - avoid the generic leaf handling
+    list.push(typeof value === 'string' ? value : String(value));
+  } else if (Array.isArray(value)) {
+    // Search each item in the array.
+    for (let i = 0, len = value.length; i < len; i += 1) {
+      collectValues(value[i], segments, segIdx + 1, list);
+    }
+  } else if (!isLast) {
+    // An object. Recurse further.
+    collectValues(value, segments, segIdx + 1, list);
+  } else {
+    collectLeaf(value, list);
+  }
+  return list;
 }
 
 /**
@@ -620,49 +913,8 @@ interface MetaDataItem<T> {
  */
 export function getProperty(obj: unknown, path: string | null, list: string[] = []): string[] {
   if (!path) {
-    // If there's no path left, we've gotten to the object we care about.
-    // Fast path for primitives - avoid JSON.stringify
-    if (typeof obj === 'string') {
-      list.push(obj);
-    } else if (typeof obj === 'number' || typeof obj === 'boolean') {
-      list.push(String(obj));
-    } else if (obj !== null && obj !== undefined) {
-      list.push(JSON.stringify(obj));
-    }
-  } else {
-    // Cheap null/undefined guard: indexing null/undefined throws, but primitives
-    // (string/number/etc.) safely return undefined for non-numeric keys, so we
-    // skip the typeof check and let the existing `value !== null && value !== undefined`
-    // branch below filter those. Cuts per-recursion overhead on the hot path.
-    if (obj == null) return list;
-
-    const dotIndex = path.indexOf('.');
-    let firstSegment = path;
-    let remaining: string | null = null;
-
-    if (dotIndex !== -1) {
-      firstSegment = path.slice(0, dotIndex);
-      remaining = path.slice(dotIndex + 1);
-    }
-
-    const value = (obj as Record<string, unknown>)[firstSegment];
-
-    if (value !== null && value !== undefined) {
-      if (!remaining && (typeof value === 'string' || typeof value === 'number')) {
-        list.push(value.toString());
-      } else if (Array.isArray(value)) {
-        // Search each item in the array.
-        for (let i = 0, len = value.length; i < len; i += 1) {
-          getProperty(value[i], remaining, list);
-        }
-      } else if (remaining) {
-        // An object. Recurse further.
-        getProperty(value, remaining, list);
-      } else {
-        getProperty(value, null, list);
-      }
-    }
+    collectLeaf(obj, list);
+    return list;
   }
-
-  return list;
+  return collectValues(obj, path.split('.'), 0, list);
 }

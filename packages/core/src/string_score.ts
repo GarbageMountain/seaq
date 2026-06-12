@@ -32,11 +32,26 @@ export function string_score(
 ): number {
   // If the string is equal to the word, perfect match.
   if (target === query) {
+    if (positions) {
+      for (let p = 0; p < target.length; p += 1) positions.push(p);
+    }
     return 1;
   }
 
   // if it's not a perfect match and is empty return 0
   if (query === '') {
+    return 0;
+  }
+
+  // Nothing can match inside an empty target (also avoids 0/0 = NaN in the
+  // final length-weighted formula)
+  if (target === '') {
+    return 0;
+  }
+
+  // Strict mode: every query char must match a distinct target position, so a
+  // query longer than the target can never fully match — skip the scan
+  if (!fuzziness && query.length > target.length) {
     return 0;
   }
 
