@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CustomDataPanel } from './components/CustomDataPanel';
 import { DatasetPicker } from './components/DatasetPicker';
+import { Hero } from './components/Hero';
+import { Reference } from './components/Reference';
 import { ResultsColumn } from './components/ResultsColumn';
 import { SearchInput } from './components/SearchInput';
 import { type DatasetConfig, datasets, discoverStringPaths, type SelectableDataset } from './data';
@@ -118,11 +120,55 @@ const engineOrder: EngineKey[] = ['seaq', 'seaqv1', 'fuse', 'minisearch', 'ufuzz
 
 export type EngineToggle = { muted: boolean; soloed: boolean };
 
+type View = 'playground' | 'reference';
+
+/** Hash-based view switching (#reference) so views are linkable without a router. */
+function useHashView(): View {
+  const [hash, setHash] = useState(() => window.location.hash);
+  useEffect(() => {
+    const onChange = () => setHash(window.location.hash);
+    window.addEventListener('hashchange', onChange);
+    return () => window.removeEventListener('hashchange', onChange);
+  }, []);
+  return hash === '#reference' ? 'reference' : 'playground';
+}
+
+function NavBar({ view }: { view: View }) {
+  const tabClass = (active: boolean) =>
+    `rounded-md px-3 py-1.5 text-sm font-medium ${
+      active
+        ? 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-white'
+        : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
+    }`;
+  return (
+    <nav className="sticky top-0 z-10 mb-6 flex items-center gap-2 border-b border-gray-200 bg-white/90 py-3 backdrop-blur dark:border-gray-800 dark:bg-gray-900/90">
+      <a href="#playground" className="mr-2 text-lg font-bold text-gray-900 dark:text-white">
+        seaq
+      </a>
+      <a href="#playground" className={tabClass(view === 'playground')}>
+        Playground
+      </a>
+      <a href="#reference" className={tabClass(view === 'reference')}>
+        Reference
+      </a>
+      <a
+        href="https://github.com/garbagemountain/seaq"
+        target="_blank"
+        rel="noreferrer"
+        className="ml-auto text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+      >
+        GitHub ↗
+      </a>
+    </nav>
+  );
+}
+
 const defaultToggles: Record<EngineKey, EngineToggle> = Object.fromEntries(
   engineOrder.map((k) => [k, { muted: false, soloed: false }]),
 ) as Record<EngineKey, EngineToggle>;
 
 export function App() {
+  const view = useHashView();
   const [query, setQuery] = useState('');
   const [dataset, setDataset] = useState<SelectableDataset>('contacts');
   const [customDs, setCustomDs] = useState<DatasetConfig | null>(null);
@@ -234,97 +280,97 @@ export function App() {
   }, [query, ds, configs, isActive]);
 
   return (
-    <div className="mx-auto min-h-screen max-w-[100rem] bg-white px-4 py-8 dark:bg-gray-900">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          seaq — Interactive Search Comparison
-        </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Compare seaq v1 &amp; v2 against Fuse.js, MiniSearch, uFuzzy, and Lunr with live results
-          and performance timings.
-        </p>
-      </header>
+    <div className="mx-auto min-h-screen max-w-[100rem] bg-white px-4 pb-8 dark:bg-gray-900">
+      <NavBar view={view} />
 
-      <div className="mb-6 space-y-4">
-        <SearchInput value={query} onChange={setQuery} />
-        <DatasetPicker
-          selected={dataset}
-          onChange={setDataset}
-          customLabel={customDs?.label ?? null}
-        />
-        {dataset === 'custom' && (
-          <CustomDataPanel
-            current={customDs}
-            onLoad={setCustomDs}
-            onClear={() => setCustomDs(null)}
-          />
-        )}
-        {allPaths.length > 0 && (
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-xs font-medium text-gray-700 dark:text-gray-200">
-              Search fields:
-            </span>
-            {allPaths.map((k) => (
-              <label
-                key={k}
-                className="flex items-center gap-1 text-xs text-gray-800 dark:text-gray-200"
-              >
-                <input
-                  type="checkbox"
-                  className="rounded border-gray-300 dark:border-gray-600"
-                  checked={effectiveKeys.includes(k)}
-                  onChange={(e) => {
-                    const current = selectedKeys.length > 0 ? selectedKeys : [...rawDs.keys];
-                    const next = e.target.checked
-                      ? [...current, k].filter((v, i, a) => a.indexOf(v) === i)
-                      : current.filter((v) => v !== k);
-                    setSelectedKeys(next);
-                  }}
-                />
-                <span>
-                  {k}
-                  {rawDs.keys.includes(k) && (
-                    <span className="ml-0.5 text-[10px] text-gray-500 dark:text-gray-400">
-                      (default)
-                    </span>
-                  )}
-                </span>
-              </label>
-            ))}
-          </div>
-        )}
-        {ds.data.length > 0 && (
-          <details className="rounded-md border border-gray-200 bg-gray-900 dark:border-gray-700">
-            <summary className="cursor-pointer select-none px-4 py-2 text-xs text-gray-400 hover:text-gray-300">
-              <span className="font-medium">Sample entry</span>
-              {ds.keys.length > 0 && (
-                <span className="ml-2 text-gray-500">keys: [{ds.keys.join(', ')}]</span>
-              )}
-            </summary>
-            <pre className="overflow-x-auto whitespace-pre border-t border-gray-800 px-4 py-3 text-xs leading-relaxed text-gray-100">
-              <code>{JSON.stringify(ds.data[0], null, 2)}</code>
-            </pre>
-          </details>
-        )}
-      </div>
+      {view === 'reference' && <Reference />}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {engineOrder.map((engine) => (
-          <ResultsColumn
-            key={engine}
-            engineKey={engine}
-            name={engineNames[engine]}
-            query={query}
-            keys={ds.keys}
-            arrayKeyMap={arrayKeyMap}
-            result={results[engine]}
-            config={configs[engine]}
-            onConfigChange={(patch) => updateConfig(engine, patch)}
-            toggle={toggles[engine]}
-            onToggle={(patch) => setToggle(engine, patch)}
-            active={isActive(engine)}
+      {/* The playground stays mounted while reading the reference so query,
+          custom data, and engine configs survive tab switches */}
+      <div className={view === 'playground' ? undefined : 'hidden'}>
+        <Hero />
+
+        <div className="mb-6 space-y-4">
+          <SearchInput value={query} onChange={setQuery} />
+          <DatasetPicker
+            selected={dataset}
+            onChange={setDataset}
+            customLabel={customDs?.label ?? null}
           />
-        ))}
+          {dataset === 'custom' && (
+            <CustomDataPanel
+              current={customDs}
+              onLoad={setCustomDs}
+              onClear={() => setCustomDs(null)}
+            />
+          )}
+          {allPaths.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-xs font-medium text-gray-700 dark:text-gray-200">
+                Search fields:
+              </span>
+              {allPaths.map((k) => (
+                <label
+                  key={k}
+                  className="flex items-center gap-1 text-xs text-gray-800 dark:text-gray-200"
+                >
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300 dark:border-gray-600"
+                    checked={effectiveKeys.includes(k)}
+                    onChange={(e) => {
+                      const current = selectedKeys.length > 0 ? selectedKeys : [...rawDs.keys];
+                      const next = e.target.checked
+                        ? [...current, k].filter((v, i, a) => a.indexOf(v) === i)
+                        : current.filter((v) => v !== k);
+                      setSelectedKeys(next);
+                    }}
+                  />
+                  <span>
+                    {k}
+                    {rawDs.keys.includes(k) && (
+                      <span className="ml-0.5 text-[10px] text-gray-500 dark:text-gray-400">
+                        (default)
+                      </span>
+                    )}
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+          {ds.data.length > 0 && (
+            <details className="rounded-md border border-gray-200 bg-gray-900 dark:border-gray-700">
+              <summary className="cursor-pointer select-none px-4 py-2 text-xs text-gray-400 hover:text-gray-300">
+                <span className="font-medium">Sample entry</span>
+                {ds.keys.length > 0 && (
+                  <span className="ml-2 text-gray-500">keys: [{ds.keys.join(', ')}]</span>
+                )}
+              </summary>
+              <pre className="overflow-x-auto whitespace-pre border-t border-gray-800 px-4 py-3 text-xs leading-relaxed text-gray-100">
+                <code>{JSON.stringify(ds.data[0], null, 2)}</code>
+              </pre>
+            </details>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          {engineOrder.map((engine) => (
+            <ResultsColumn
+              key={engine}
+              engineKey={engine}
+              name={engineNames[engine]}
+              query={query}
+              keys={ds.keys}
+              arrayKeyMap={arrayKeyMap}
+              result={results[engine]}
+              config={configs[engine]}
+              onConfigChange={(patch) => updateConfig(engine, patch)}
+              toggle={toggles[engine]}
+              onToggle={(patch) => setToggle(engine, patch)}
+              active={isActive(engine)}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

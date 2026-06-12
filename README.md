@@ -19,8 +19,8 @@ This is a yarn workspaces monorepo.
 | Package | Description |
 |---------|-------------|
 | [`packages/core`](./packages/core) | The published `seaq` library. |
-| [`packages/test-data`](./packages/test-data) | Shared fixtures (contacts, cities, books) consumed by tests and the examples app. Not published. |
-| [`packages/examples`](./packages/examples) | Interactive Vite + React site comparing seaq against Fuse.js, MiniSearch, uFuzzy, and Lunr across real datasets. |
+| [`packages/test-data`](./packages/test-data) | Shared fixtures (contacts, cities, books) consumed by tests and the docs site. Not published. |
+| [`packages/docs`](./packages/docs) | Docs site with an interactive playground comparing seaq against Fuse.js, MiniSearch, uFuzzy, and Lunr — including bring-your-own-JSON data. |
 
 Other docs:
 
@@ -37,7 +37,7 @@ yarn build          # build all packages
 yarn test           # run all tests
 yarn ts-check       # type-check the whole repo
 yarn check          # biome lint
-yarn dev            # build core in watch mode + run examples site
+yarn dev            # build core in watch mode + run docs site
 ```
 
 Benchmarks live in `packages/core/test/perf`:

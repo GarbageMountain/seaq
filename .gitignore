@@ -26,3 +26,4 @@ coverage
 
 # Misc
 packages/core/benchmarks/*.json
+.playwright-mcp/

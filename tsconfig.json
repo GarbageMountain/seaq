@@ -7,6 +7,6 @@
   "references": [
     { "path": "packages/test-data" },
     { "path": "packages/core" },
-    { "path": "packages/examples" }
+    { "path": "packages/docs" }
   ]
 }
