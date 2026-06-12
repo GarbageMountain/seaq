@@ -135,6 +135,7 @@ export type CustomParseResult = { ok: true; config: DatasetConfig } | { ok: fals
 function describeType(v: unknown): string {
   if (v === null) return 'null';
   if (Array.isArray(v)) return 'an array';
+  if (typeof v === 'object') return 'an object';
   return `a ${typeof v}`;
 }
 
