@@ -1,6 +1,17 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* The app container is centered with a max width — paint the document
+   behind it the same color so wide screens don't show white gutters */
+html {
+  background-color: #fff;
+}
+@media (prefers-color-scheme: dark) {
+  html {
+    background-color: #111827; /* matches the app's dark:bg-gray-900 */
+  }
+}
+
 mark {
   background: #fde047;
   padding: 0 1px;

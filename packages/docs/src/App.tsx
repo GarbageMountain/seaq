@@ -280,7 +280,7 @@ export function App() {
   }, [query, ds, configs, isActive]);
 
   return (
-    <div className="mx-auto min-h-screen max-w-[100rem] bg-white px-4 pb-8 dark:bg-gray-900">
+    <div className="mx-auto min-h-screen max-w-[120rem] bg-white px-4 pb-8 sm:px-6 dark:bg-gray-900">
       <NavBar view={view} />
 
       {view === 'reference' && <Reference />}
