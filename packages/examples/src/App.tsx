@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { CustomDataPanel } from './components/CustomDataPanel';
 import { DatasetPicker } from './components/DatasetPicker';
 import { ResultsColumn } from './components/ResultsColumn';
 import { SearchInput } from './components/SearchInput';
-import { type DatasetKey, datasets } from './data';
+import { type DatasetConfig, datasets, discoverStringPaths, type SelectableDataset } from './data';
 import {
   clearFuseCache,
   clearLunrCache,
@@ -18,41 +19,20 @@ import {
 
 export type EngineKey = 'seaq' | 'seaqv1' | 'fuse' | 'minisearch' | 'ufuzzy' | 'lunr';
 
-/** Walk a single item and return all dot-paths that lead to a string value. */
-function discoverItemPaths(item: unknown, prefix = ''): string[] {
-  if (item == null || typeof item !== 'object') return [];
-  if (Array.isArray(item)) {
-    return item.length > 0 ? discoverItemPaths(item[0], prefix) : [];
-  }
-  const paths: string[] = [];
-  for (const [key, val] of Object.entries(item as Record<string, unknown>)) {
-    const path = prefix ? `${prefix}.${key}` : key;
-    if (typeof val === 'string') {
-      paths.push(path);
-    } else if (typeof val === 'object' && val != null) {
-      paths.push(...discoverItemPaths(val, path));
-    }
-  }
-  return paths;
-}
-
-/** Sample multiple items to discover all string paths, including optional fields. */
-function discoverStringPaths(data: unknown[]): string[] {
-  const seen = new Set<string>();
-  const sample = data.slice(0, 20);
-  for (const item of sample) {
-    for (const path of discoverItemPaths(item)) {
-      seen.add(path);
-    }
-  }
-  return [...seen];
-}
+/** Shown when "Your JSON" is selected but nothing has been loaded yet. */
+const emptyCustomDataset: DatasetConfig = {
+  label: 'Your JSON',
+  data: [],
+  keys: [],
+  displayFn: (item) => String(item),
+};
 
 export interface SeaqConfig {
   fuzziness: number;
   fieldMode: 'joined' | 'separate';
   limit: number | undefined;
   threshold: number;
+  cache: boolean;
 }
 
 export interface SeaqV1Config {
@@ -103,7 +83,7 @@ export interface EngineConfigs {
 }
 
 export const defaultConfigs: EngineConfigs = {
-  seaq: { fuzziness: 0.2, fieldMode: 'joined', limit: 10, threshold: 0.3 },
+  seaq: { fuzziness: 0.2, fieldMode: 'joined', limit: 10, threshold: 0.3, cache: false },
   seaqv1: { fuzziness: 0.2 },
   fuse: {
     threshold: 0.4,
@@ -144,7 +124,8 @@ const defaultToggles: Record<EngineKey, EngineToggle> = Object.fromEntries(
 
 export function App() {
   const [query, setQuery] = useState('');
-  const [dataset, setDataset] = useState<DatasetKey>('contacts');
+  const [dataset, setDataset] = useState<SelectableDataset>('contacts');
+  const [customDs, setCustomDs] = useState<DatasetConfig | null>(null);
   const [configs, setConfigs] = useState<EngineConfigs>(defaultConfigs);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [toggles, setToggles] = useState<Record<EngineKey, EngineToggle>>(defaultToggles);
@@ -163,7 +144,10 @@ export function App() {
     setToggles((prev) => ({ ...prev, [engine]: { ...prev[engine], ...patch } }));
   }, []);
 
-  const rawDs = useMemo(() => datasets[dataset], [dataset]);
+  const rawDs = useMemo(
+    () => (dataset === 'custom' ? (customDs ?? emptyCustomDataset) : datasets[dataset]),
+    [dataset, customDs],
+  );
   const allPaths = useMemo(
     () =>
       rawDs.data.length > 0 && typeof rawDs.data[0] === 'object'
@@ -199,13 +183,15 @@ export function App() {
     return map;
   }, [ds.data, ds.keys]);
 
-  // Clear caches and key selection when dataset changes
+  // Clear caches and key selection whenever the underlying data changes
+  // (dataset switch or a new custom upload)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rawDs.data identity is the intended trigger
   useEffect(() => {
     clearFuseCache();
     clearMiniSearchCache();
     clearLunrCache();
     setSelectedKeys([]);
-  }, []);
+  }, [rawDs.data]);
 
   const updateConfig = useCallback(
     <K extends EngineKey>(engine: K, patch: Partial<EngineConfigs[K]>) => {
@@ -261,7 +247,18 @@ export function App() {
 
       <div className="mb-6 space-y-4">
         <SearchInput value={query} onChange={setQuery} />
-        <DatasetPicker selected={dataset} onChange={setDataset} />
+        <DatasetPicker
+          selected={dataset}
+          onChange={setDataset}
+          customLabel={customDs?.label ?? null}
+        />
+        {dataset === 'custom' && (
+          <CustomDataPanel
+            current={customDs}
+            onLoad={setCustomDs}
+            onClear={() => setCustomDs(null)}
+          />
+        )}
         {allPaths.length > 0 && (
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-xs font-medium text-gray-700 dark:text-gray-200">
@@ -296,17 +293,19 @@ export function App() {
             ))}
           </div>
         )}
-        <details className="rounded-md border border-gray-200 bg-gray-900 dark:border-gray-700">
-          <summary className="cursor-pointer select-none px-4 py-2 text-xs text-gray-400 hover:text-gray-300">
-            <span className="font-medium">Sample entry</span>
-            {ds.keys.length > 0 && (
-              <span className="ml-2 text-gray-500">keys: [{ds.keys.join(', ')}]</span>
-            )}
-          </summary>
-          <pre className="overflow-x-auto whitespace-pre border-t border-gray-800 px-4 py-3 text-xs leading-relaxed text-gray-100">
-            <code>{JSON.stringify(ds.data[0], null, 2)}</code>
-          </pre>
-        </details>
+        {ds.data.length > 0 && (
+          <details className="rounded-md border border-gray-200 bg-gray-900 dark:border-gray-700">
+            <summary className="cursor-pointer select-none px-4 py-2 text-xs text-gray-400 hover:text-gray-300">
+              <span className="font-medium">Sample entry</span>
+              {ds.keys.length > 0 && (
+                <span className="ml-2 text-gray-500">keys: [{ds.keys.join(', ')}]</span>
+              )}
+            </summary>
+            <pre className="overflow-x-auto whitespace-pre border-t border-gray-800 px-4 py-3 text-xs leading-relaxed text-gray-100">
+              <code>{JSON.stringify(ds.data[0], null, 2)}</code>
+            </pre>
+          </details>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">

@@ -56,6 +56,7 @@ export function searchSeaq(
       limit: config.limit ?? undefined,
       threshold: config.threshold,
       includeMatches: true,
+      cache: config.cache,
     });
   });
   const top = result.slice(0, config.limit ?? 10);
@@ -73,37 +74,26 @@ export function searchSeaq(
         return highlightRanges(first.value, first.indices);
       }
 
-      // Separate mode (matches have .key): highlight ALL matched fields
-      if (first.key) {
-        return buildFieldsHtml(r.item, dataset.keys, (val, key) => {
-          const match = matches.find((m) => m.key === key);
-          if (!match) return esc(val);
-          if (val === match.value) {
-            return highlightRanges(val, match.indices);
+      // Both field modes return per-field matches with .key set and indices
+      // relative to the field value — highlight every matched field. A key
+      // can carry multiple matches (array fields, multi-token queries).
+      return buildFieldsHtml(r.item, dataset.keys, (val, key) => {
+        const ranges: [number, number][] = [];
+        for (const m of matches) {
+          if (m.key !== key) continue;
+          if (val === m.value) {
+            ranges.push(...m.indices);
+          } else {
+            // Array field: val is comma-joined, m.value is a single element.
+            // Find the matched element within the joined string and offset ranges.
+            const idx = val.indexOf(m.value);
+            if (idx !== -1) {
+              for (const [s, e] of m.indices) ranges.push([s + idx, e + idx]);
+            }
           }
-          // Array field: val is comma-joined, match.value is a single element.
-          // Find the matched element within the joined string and offset ranges.
-          const idx = val.indexOf(match.value);
-          if (idx !== -1) {
-            const offsetRanges = match.indices.map(
-              ([s, e]) => [s + idx, e + idx] as [number, number],
-            );
-            return highlightRanges(val, offsetRanges);
-          }
-          return esc(val);
-        });
-      }
-
-      // Joined mode: extract matched substrings and split at word boundaries
-      // so cross-field terms like "Helen Green" become ["Helen", "Green"].
-      // This is a best-effort approach — the core returns indices relative to
-      // the joined string with no per-field breakdown.
-      const terms = first.indices
-        .map(([s, e]) => first.value.slice(s, e + 1))
-        .flatMap((t) => t.split(/\s+/))
-        .filter(Boolean);
-      return buildFieldsHtml(r.item, dataset.keys, (val) => {
-        return highlightTerms(val, terms);
+        }
+        if (ranges.length === 0) return esc(val);
+        return highlightRanges(val, mergeRanges(ranges));
       });
     }),
     items: top.map((r) => r.item),
@@ -509,6 +499,21 @@ function arraysEqual(a: string[], b: string[]): boolean {
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** Sort ranges and merge overlapping/adjacent ones so marks never double-emit characters. */
+function mergeRanges(ranges: [number, number][]): [number, number][] {
+  ranges.sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [];
+  for (const r of ranges) {
+    const last = merged[merged.length - 1];
+    if (last && r[0] <= last[1] + 1) {
+      last[1] = Math.max(last[1], r[1]);
+    } else {
+      merged.push([r[0], r[1]]);
+    }
+  }
+  return merged;
 }
 
 function highlightRanges(text: string, ranges: readonly (readonly [number, number])[]): string {

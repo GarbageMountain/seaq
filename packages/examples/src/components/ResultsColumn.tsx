@@ -52,6 +52,7 @@ function seaqSnippet(query: string, keys: string[], config: SeaqConfig): string 
   if (config.fieldMode !== 'joined') opts.push(`fieldMode: '${config.fieldMode}'`);
   if (config.limit != null && config.limit !== 10) opts.push(`limit: ${config.limit}`);
   if (config.threshold !== 0.3) opts.push(`threshold: ${config.threshold}`);
+  if (config.cache) opts.push(`cache: true`);
   const optsStr = opts.length > 0 ? `, {\n  ${opts.join(',\n  ')}\n}` : '';
   return `seaq(data, ${q(query)}${optsStr})`;
 }
@@ -346,6 +347,12 @@ function SeaqControls({
           { value: 'off', label: 'All' },
         ]}
         onChange={(v) => onChange({ limit: v === 'off' ? undefined : Number(v) })}
+      />
+      <Check
+        label="Cache"
+        hint="Reuse prepared strings across searches (typeahead on static data)."
+        checked={config.cache}
+        onChange={(v) => onChange({ cache: v })}
       />
     </>
   );

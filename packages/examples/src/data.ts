@@ -69,11 +69,154 @@ export const cities: City[] = citiesJson as City[];
 
 export type DatasetKey = 'books' | 'contacts' | 'cities' | 'phrases';
 
+/** The dataset selector also offers a user-provided JSON dataset. */
+export type SelectableDataset = DatasetKey | 'custom';
+
 export interface DatasetConfig {
   label: string;
   data: unknown[];
   keys: string[];
   displayFn: (item: unknown) => string;
+}
+
+// ── Custom (user-provided) datasets ──
+
+/** Walk a single item and return all dot-paths that lead to a string value. */
+export function discoverItemPaths(item: unknown, prefix = ''): string[] {
+  if (item == null || typeof item !== 'object') return [];
+  if (Array.isArray(item)) {
+    return item.length > 0 ? discoverItemPaths(item[0], prefix) : [];
+  }
+  const paths: string[] = [];
+  for (const [key, val] of Object.entries(item as Record<string, unknown>)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (typeof val === 'string') {
+      paths.push(path);
+    } else if (typeof val === 'object' && val != null) {
+      paths.push(...discoverItemPaths(val, path));
+    }
+  }
+  return paths;
+}
+
+/** Sample multiple items to discover all string paths, including optional fields. */
+export function discoverStringPaths(data: unknown[]): string[] {
+  const seen = new Set<string>();
+  const sample = data.slice(0, 20);
+  for (const item of sample) {
+    for (const path of discoverItemPaths(item)) {
+      seen.add(path);
+    }
+  }
+  return [...seen];
+}
+
+/** Resolve a dot path on an item for display purposes (arrays joined with commas). */
+function resolveDisplayPath(item: unknown, path: string): string {
+  const parts = path.split('.');
+  let val: unknown = item;
+  for (let i = 0; i < parts.length; i++) {
+    if (val == null) return '';
+    if (Array.isArray(val)) {
+      const rest = parts.slice(i).join('.');
+      return val
+        .map((v) => resolveDisplayPath(v, rest))
+        .filter(Boolean)
+        .join(', ');
+    }
+    val = (val as Record<string, unknown>)[parts[i] as string];
+  }
+  if (val == null || typeof val === 'object') return '';
+  return String(val);
+}
+
+export type CustomParseResult = { ok: true; config: DatasetConfig } | { ok: false; error: string };
+
+function describeType(v: unknown): string {
+  if (v === null) return 'null';
+  if (Array.isArray(v)) return 'an array';
+  return `a ${typeof v}`;
+}
+
+/**
+ * Parse user-supplied JSON into a searchable dataset.
+ *
+ * Constraints: the JSON must be a non-empty array, and items must be
+ * homogeneous — either all strings, or all plain objects with at least one
+ * string field somewhere to search.
+ */
+export function parseCustomDataset(jsonText: string): CustomParseResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch (e) {
+    return { ok: false, error: `That isn't valid JSON: ${(e as Error).message}` };
+  }
+
+  if (!Array.isArray(parsed)) {
+    return {
+      ok: false,
+      error: `The JSON must be an array of items — got ${describeType(parsed)}. Wrap your records in [ ... ].`,
+    };
+  }
+  if (parsed.length === 0) {
+    return { ok: false, error: 'The array is empty — add at least one item.' };
+  }
+
+  const first = parsed[0];
+  const wantStrings = typeof first === 'string';
+  const wantObjects = typeof first === 'object' && first !== null && !Array.isArray(first);
+  if (!wantStrings && !wantObjects) {
+    return {
+      ok: false,
+      error: `Items must be strings or objects — the first item is ${describeType(first)}.`,
+    };
+  }
+
+  for (let i = 1; i < parsed.length; i++) {
+    const item = parsed[i];
+    const isString = typeof item === 'string';
+    const isObject = typeof item === 'object' && item !== null && !Array.isArray(item);
+    if ((wantStrings && !isString) || (wantObjects && !isObject)) {
+      return {
+        ok: false,
+        error: `Items must be homogeneous: item 0 is ${describeType(first)} but item ${i} is ${describeType(item)}.`,
+      };
+    }
+  }
+
+  const label = `Custom (${parsed.length.toLocaleString()})`;
+
+  if (wantStrings) {
+    return {
+      ok: true,
+      config: { label, data: parsed, keys: [], displayFn: (item) => String(item) },
+    };
+  }
+
+  const allPaths = discoverStringPaths(parsed);
+  if (allPaths.length === 0) {
+    return {
+      ok: false,
+      error:
+        'No string fields found in the sampled items — there is nothing text-like to search. Items need at least one string property (nested is fine).',
+    };
+  }
+  // Default to the first few discovered fields; the field picker can add the rest
+  const keys = allPaths.slice(0, 4);
+  const displayKeys = keys.slice(0, 2);
+  return {
+    ok: true,
+    config: {
+      label,
+      data: parsed,
+      keys,
+      displayFn: (item) => {
+        const partsList = displayKeys.map((k) => resolveDisplayPath(item, k)).filter(Boolean);
+        return partsList.length > 0 ? partsList.join(' — ') : JSON.stringify(item).slice(0, 80);
+      },
+    },
+  };
 }
 
 function contactDisplay(item: unknown): string {
