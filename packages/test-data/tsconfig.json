@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "include": ["src/**/*"],
+  "compilerOptions": {
+    "outDir": "../../.tsc-out/packages/test-data"
+  }
+}

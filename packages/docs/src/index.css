@@ -1,0 +1,61 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* The app container is centered with a max width — paint the document
+   behind it the same color so wide screens don't show white gutters */
+html {
+  background-color: #fff;
+}
+@media (prefers-color-scheme: dark) {
+  html {
+    background-color: #111827; /* matches the app's dark:bg-gray-900 */
+  }
+}
+
+/* Reference view: visual structure on top of the rendered README */
+
+/* Clear section breaks before each h2 */
+.reference-prose h2 {
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 1px solid #e5e7eb;
+}
+@media (prefers-color-scheme: dark) {
+  .reference-prose h2 {
+    border-top-color: #1f2937;
+  }
+}
+
+/* Inline code as a subtle chip — distinct from prose without shouting.
+   (Code inside pre blocks keeps the block styling.) */
+.reference-prose :not(pre) > code {
+  background-color: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.3rem;
+  font-weight: 500;
+}
+@media (prefers-color-scheme: dark) {
+  .reference-prose :not(pre) > code {
+    background-color: #1f2937;
+    border-color: #374151;
+  }
+}
+
+/* Wide tables (the options table) scroll instead of breaking the column */
+.reference-prose table {
+  display: block;
+  overflow-x: auto;
+}
+
+mark {
+  background: #fde047;
+  padding: 0 1px;
+  border-radius: 1px;
+}
+@media (prefers-color-scheme: dark) {
+  mark {
+    background: #854d0e;
+    color: #fef9c3;
+  }
+}

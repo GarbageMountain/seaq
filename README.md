@@ -1,48 +1,71 @@
-# Seaq - Real nice ES6 fuzzy string search
+# seaq
 
-Seaq is an ES6 string search library heavily inspired by [Fuse.js](https://github.com/krisk/fuse). It is built in [Typescript](https://github.com/Microsoft/TypeScript) implementing the fantastic [string_score](https://github.com/joshaven/string_score) string matching algorithm.
+[![npm](https://img.shields.io/npm/v/seaq?label=npm)](https://www.npmjs.com/package/seaq)
 
-| Statements                                                                  | Branches                                                                  | Functions                                                                  | Lines                                                                  |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| ![Statements](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg) | ![Branches](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg) | ![Functions](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg) | ![Lines](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg) |
-
-## Basic usage
+Zero-dependency fuzzy search for JavaScript and TypeScript. One function, no index, no setup. Works the same whether your list has 20 items or 20,000.
 
 ```typescript
 import { seaq } from 'seaq';
 
-const contacts = [ { name: 'John', ... }, { name: 'Jane', ... }];
-const queryString = 'jo';
-
-const orderedContacts = seaq(contacts, queryString, ['name']);
+seaq(contacts, 'john', { keys: ['name', 'email'] });
 ```
 
-## API
+For installation, usage, and the full API see **[`packages/core/README.md`](./packages/core/README.md)** — that's also what ships on npm.
 
-```typescript
-/**
- * Given an input list Array<T>, a set of object keys to search, and a search
- * query, Seaq will return a new Array<T> containing the results ordered by
- * their Score which is calculated using a variation of string_score algorithm.
- *
- * @export
- * @template T generic
- * @param {Array<T>} list list of objects or strings to search
- * @param {string} query query string to match against keys in objects
- * @param {(Array<Extract<keyof T, string>> | string[])} keys optional keys to search in the object
- * @param {number} [fuzzy] optional fuzziness should be between 0 and 1. low fuzziness like 0.01 means a mismatch will drop the score more then a fuzziness of something like 0.9.
- * @returns {Array<T>}
- */
-export function seaq<T>(
-  list: Array<T>,
-  query: string,
-  keys?: Array<Extract<keyof T, string>> | string[],
-  fuzzy?: number,
-): Array<T>;
+## Repo layout
+
+This is a yarn workspaces monorepo.
+
+| Package | Description |
+|---------|-------------|
+| [`packages/core`](./packages/core) | The published `seaq` library. |
+| [`packages/test-data`](./packages/test-data) | Shared fixtures (contacts, cities, books) consumed by tests and the docs site. Not published. |
+| [`packages/docs`](./packages/docs) | Docs site with an interactive playground comparing seaq against Fuse.js, MiniSearch, uFuzzy, and Lunr — including bring-your-own-JSON data. |
+
+Other docs:
+
+- [BENCHMARKS.md](./BENCHMARKS.md) — performance methodology and numbers
+- [WHY-SEAQ.md](./WHY-SEAQ.md) — when seaq is the right tool (and when it isn't)
+
+## Development
+
+Prerequisites: Node 22+, yarn 4 (managed via `packageManager` in `package.json`).
+
+```bash
+yarn install
+yarn build          # build all packages
+yarn test           # run all tests
+yarn ts-check       # type-check the whole repo
+yarn check          # biome lint
+yarn dev            # build core in watch mode + run docs site
 ```
 
-## Performance
+Benchmarks live in `packages/core/test/perf`:
 
-Running `yarn benchmark` yields the follow results comparing `seaq` to [`Fuse.js`](https://github.com/krisk/Fuse)
-![Benchmark](./benchmark.png)
-Granted this is not an apples to apples comparison because `Fuse.js` and `seaq` provide very different results. `seaq` has fewer configuration options and may not be flexible enough for some use-cases. But generally, if performance is your primary concern, `seaq` may be the right tool for the job.
+```bash
+yarn workspace seaq benchmark
+yarn bench:save     # save benchmark JSON keyed by commit short SHA
+```
+
+## Releasing
+
+Manual, run from a clean working tree:
+
+```bash
+# 1. Bump version in root package.json and packages/core/package.json
+# 2. Commit the bump
+# 3. Inspect what will be published
+yarn release:pack
+
+# 4. Publish
+yarn release:publish:next     # prereleases (rc, beta, alpha) -> npm 'next' tag
+yarn release:publish:latest   # stable releases -> npm 'latest' tag
+```
+
+`release:publish:*` runs `release:verify` first (ts-check + lint + test + build) and then `npm publish --access public --tag <tag>` from `packages/core`.
+
+A GitHub Actions release workflow (`.github/workflows/release.yml`) is also available via workflow_dispatch.
+
+## License
+
+MIT

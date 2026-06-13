@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "include": ["src/**/*", "test/**/*"],
+  "compilerOptions": {
+    "outDir": "../../.tsc-out/packages/core",
+    "resolveJsonModule": true,
+    "noUncheckedIndexedAccess": false
+  },
+  "references": [{ "path": "../test-data" }]
+}
