@@ -122,7 +122,11 @@ export type EngineToggle = { muted: boolean; soloed: boolean };
 
 type View = 'playground' | 'reference';
 
-/** Hash-based view switching (#reference) so views are linkable without a router. */
+/**
+ * Hash-based view switching so views are linkable without a router.
+ * `#reference` selects the docs view; `#reference/<section>` deep-links
+ * into a section (handled inside Reference); anything else is the playground.
+ */
 function useHashView(): View {
   const [hash, setHash] = useState(() => window.location.hash);
   useEffect(() => {
@@ -130,7 +134,7 @@ function useHashView(): View {
     window.addEventListener('hashchange', onChange);
     return () => window.removeEventListener('hashchange', onChange);
   }, []);
-  return hash === '#reference' ? 'reference' : 'playground';
+  return hash.startsWith('#reference') ? 'reference' : 'playground';
 }
 
 function NavBar({ view }: { view: View }) {
