@@ -38,17 +38,5 @@
         "noForEach": "warn"
       }
     }
-  },
-  "overrides": [
-    {
-      "includes": ["packages/core/src/**"],
-      "linter": {
-        "rules": {
-          "style": {
-            "noNonNullAssertion": "off"
-          }
-        }
-      }
-    }
-  ]
+  }
 }
