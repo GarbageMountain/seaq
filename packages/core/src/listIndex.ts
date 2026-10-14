@@ -81,8 +81,8 @@ export function scoreIndexed<T>(
   const { lastRows: rows, scores } = index;
   const items: Scored<T>[] = [];
   for (let i = 0; i < rowsLen; i++) {
-    const r = rows[i];
-    const s = scores[r];
+    const r = rows[i]!;
+    const s = scores[r]!;
     if (s >= bar) items.push({ item: list[r] as T, score: s });
   }
   return { items, maxScore: top.max };
@@ -115,12 +115,12 @@ class TopScores {
     const heap = this.heap;
     if (!heap) return;
     if (this.len < this.cap) heapPush(heap, this.len++, s);
-    else if (s > heap[0]) heapReplaceTop(heap, this.len, s);
+    else if (s > heap[0]!) heapReplaceTop(heap, this.len, s);
   }
 
   bar(): number {
     const cutoff = this.max * this.threshold;
-    const weakest = this.heap && this.len === this.cap ? this.heap[0] : 0;
+    const weakest = this.heap && this.len === this.cap ? this.heap[0]! : 0;
     return cutoff > weakest ? cutoff : weakest;
   }
 }
@@ -172,9 +172,9 @@ function prepRow<T>(index: ListIndex, r: number, item: T, prep: (item: T) => str
   const word = r >> 5;
   const bit = 1 << (r & 31);
   // Clear the row's old classes (none for a fresh row)
-  for (let m = index.masks[r]; m !== 0; m &= m - 1) {
+  for (let m = index.masks[r]!; m !== 0; m &= m - 1) {
     const at = (31 - Math.clz32(m & -m)) * words + word;
-    bits[at] = bits[at] & ~bit;
+    bits[at] = bits[at]! & ~bit;
   }
 
   index.items[r] = item;
@@ -187,7 +187,7 @@ function prepRow<T>(index: ListIndex, r: number, item: T, prep: (item: T) => str
   index.wordStarts[r] = wordStartMask(lower);
   for (let m = mask; m !== 0; m &= m - 1) {
     const at = (31 - Math.clz32(m & -m)) * words + word;
-    bits[at] = bits[at] | bit;
+    bits[at] = bits[at]! | bit;
   }
 }
 
@@ -202,7 +202,7 @@ function scoreStrict(index: ListIndex, plan: QueryPlan, top: TopScores): number 
   let matchedLen = 0;
 
   const score = (r: number) => {
-    const s = scoreString(plan, strings[r], lowers[r], wordStarts[r], 0);
+    const s = scoreString(plan, strings[r]!, lowers[r]!, wordStarts[r]!, 0);
     if (s > 0) {
       matched[matchedLen++] = r;
       scores[r] = s;
@@ -223,8 +223,8 @@ function scoreStrict(index: ListIndex, plan: QueryPlan, top: TopScores): number 
     // written in place — it never overtakes the read position.
     const prevLen = index.lastRowsLen;
     for (let i = 0; i < prevLen; i++) {
-      const r = matched[i];
-      if ((plan.mask & ~masks[r]) === 0) score(r);
+      const r = matched[i]!;
+      if ((plan.mask & ~masks[r]!) === 0) score(r);
     }
   } else {
     // AND together the bitmaps of every class the query uses
@@ -234,9 +234,9 @@ function scoreStrict(index: ListIndex, plan: QueryPlan, top: TopScores): number 
       offsets.push((31 - Math.clz32(m & -m)) * words);
     }
     for (let w = 0; w < words; w++) {
-      let hits = bits[offsets[0] + w];
+      let hits = bits[offsets[0]! + w]!;
       for (let o = 1; o < offsets.length && hits !== 0; o++) {
-        hits &= bits[offsets[o] + w];
+        hits &= bits[offsets[o]! + w]!;
       }
       while (hits !== 0) {
         score((w << 5) + 31 - Math.clz32(hits & -hits));
@@ -267,7 +267,7 @@ function scoreFuzzy(index: ListIndex, plan: QueryPlan, fuzziness: number, top: T
   // Every scores[] slot read below was written earlier in this search, so
   // the buffer needs no clearing between searches
   const score = (r: number) => {
-    const s = scoreString(plan, strings[r], lowers[r], wordStarts[r], fuzziness);
+    const s = scoreString(plan, strings[r]!, lowers[r]!, wordStarts[r]!, fuzziness);
     scores[r] = s;
     top.record(s);
   };
@@ -275,7 +275,7 @@ function scoreFuzzy(index: ListIndex, plan: QueryPlan, fuzziness: number, top: T
   // Pass 1: rows containing every query class. They hold the best matches,
   // which raises the bar before the rest are considered.
   for (let r = 0; r < n; r++) {
-    const mask = masks[r];
+    const mask = masks[r]!;
     if (mask !== 0 && (queryMask & ~mask) === 0) score(r);
   }
 
@@ -283,14 +283,14 @@ function scoreFuzzy(index: ListIndex, plan: QueryPlan, fuzziness: number, top: T
   // or can't reach the bar. The bar only rises, so every skipped row ends
   // below it.
   for (let r = 0; r < n; r++) {
-    const mask = masks[r];
+    const mask = masks[r]!;
     // No query class at all scores 0; checked before reading the row's string
     if ((queryMask & mask) === 0) continue;
     if ((queryMask & ~mask) !== 0) {
-      if (scoreBound(ceiling, mask, lowers[r].length) < top.bar()) continue;
+      if (scoreBound(ceiling, mask, lowers[r]!.length) < top.bar()) continue;
       score(r);
     }
-    if (scores[r] > 0) rows[rowsLen++] = r;
+    if (scores[r]! > 0) rows[rowsLen++] = r;
   }
   return rowsLen;
 }
@@ -301,9 +301,9 @@ function heapPush(heap: Float64Array, len: number, value: number): void {
   heap[i] = value;
   while (i > 0) {
     const parent = (i - 1) >> 1;
-    if (heap[parent] <= heap[i]) break;
-    const tmp = heap[i];
-    heap[i] = heap[parent];
+    if (heap[parent]! <= heap[i]!) break;
+    const tmp = heap[i]!;
+    heap[i] = heap[parent]!;
     heap[parent] = tmp;
     i = parent;
   }
@@ -316,11 +316,11 @@ function heapReplaceTop(heap: Float64Array, len: number, value: number): void {
     const left = 2 * i + 1;
     const right = left + 1;
     let smallest = i;
-    if (left < len && heap[left] < heap[smallest]) smallest = left;
-    if (right < len && heap[right] < heap[smallest]) smallest = right;
+    if (left < len && heap[left]! < heap[smallest]!) smallest = left;
+    if (right < len && heap[right]! < heap[smallest]!) smallest = right;
     if (smallest === i) return;
-    const tmp = heap[i];
-    heap[i] = heap[smallest];
+    const tmp = heap[i]!;
+    heap[i] = heap[smallest]!;
     heap[smallest] = tmp;
     i = smallest;
   }

@@ -278,8 +278,8 @@ export function scoreString(
   let outOfOrder = false;
 
   for (let w = 0; w < lowerWords.length; w++) {
-    const lowerWord = lowerWords[w];
-    const word = words[w];
+    const lowerWord = lowerWords[w]!;
+    const word = words[w]!;
     // The earliest-occurrence alignment places every character whenever
     // any alignment can: if it fails, the word doesn't match
     if (!align(earliest, false, raw, lower, word, lowerWord, fuzzy, collect)) return 0;
@@ -326,7 +326,7 @@ export function scoreString(
   if (coverage > 1) coverage = 1;
   let score = (0.3 * coverage + 0.7 * (rs / plan.length)) / fuzzies;
 
-  if (lowerWords[0].codePointAt(0) === lower.codePointAt(0) && score < 0.85) score += FIRST_CHAR;
+  if (lowerWords[0]!.codePointAt(0) === lower.codePointAt(0) && score < 0.85) score += FIRST_CHAR;
   if (swaps > 0) score *= SWAP_PENALTY ** swaps;
   if (outOfOrder) score *= WORD_ORDER_PENALTY;
 
@@ -377,7 +377,7 @@ export function scoreCeiling(plan: QueryPlan, fuzziness: number): Ceiling {
   const words = plan.words.length;
   const classCount = new Int32Array(32);
   for (const word of plan.lowerWords) {
-    for (const ch of word) classCount[31 - Math.clz32(charBit(ch.charCodeAt(0)))]++;
+    for (const ch of word) classCount[31 - Math.clz32(charBit(ch.charCodeAt(0)))]!++;
   }
   const fixed = new Float64Array(len);
   const coverageCap = new Float64Array(len);
@@ -399,9 +399,9 @@ export function scoreCeiling(plan: QueryPlan, fuzziness: number): Ceiling {
 export function scoreBound(c: Ceiling, mask: number, length: number): number {
   let misses = 0;
   for (let m = c.queryMask & ~mask; m !== 0; m &= m - 1) {
-    misses += c.classCount[31 - Math.clz32(m & -m)];
+    misses += c.classCount[31 - Math.clz32(m & -m)]!;
   }
   if (misses === c.length) return 0; // nothing can be found
-  const perLength = c.coveragePerLength[misses] / length;
-  return c.fixed[misses] + Math.min(c.coverageCap[misses], perLength);
+  const perLength = c.coveragePerLength[misses]! / length;
+  return c.fixed[misses]! + Math.min(c.coverageCap[misses]!, perLength);
 }

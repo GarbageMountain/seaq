@@ -186,7 +186,7 @@ function getTopN<T>(items: Array<Scored<T>>, n: number, cutoff: number): Array<S
   // Min-heap of positions in `items`, worst at the root: lower score is
   // worse, and on equal scores the later position is worse
   const heap: number[] = [];
-  const score = (pos: number) => items[pos].score;
+  const score = (pos: number) => items[pos]!.score;
   const worse = (a: number, b: number) => {
     const sa = score(a);
     const sb = score(b);
@@ -198,14 +198,14 @@ function getTopN<T>(items: Array<Scored<T>>, n: number, cutoff: number): Array<S
     if (s < cutoff) continue;
     if (heap.length < n) {
       heapPush(heap, i, worse);
-    } else if (s > score(heap[0])) {
+    } else if (s > score(heap[0]!)) {
       // Later positions only win on a strictly higher score
       heap[0] = i;
       heapifyDown(heap, worse);
     }
   }
 
-  return heap.sort((a, b) => score(b) - score(a) || a - b).map((i) => items[i]);
+  return heap.sort((a, b) => score(b) - score(a) || a - b).map((i) => items[i]!);
 }
 
 type Worse = (a: number, b: number) => boolean;
@@ -215,9 +215,9 @@ function heapPush(heap: number[], pos: number, worse: Worse): void {
   let i = heap.length - 1;
   while (i > 0) {
     const parent = (i - 1) >> 1;
-    if (!worse(heap[i], heap[parent])) break;
-    const tmp = heap[i];
-    heap[i] = heap[parent];
+    if (!worse(heap[i]!, heap[parent]!)) break;
+    const tmp = heap[i]!;
+    heap[i] = heap[parent]!;
     heap[parent] = tmp;
     i = parent;
   }
@@ -231,12 +231,12 @@ function heapifyDown(heap: number[], worse: Worse): void {
     const right = 2 * i + 2;
     let smallest = i;
 
-    if (left < len && worse(heap[left], heap[smallest])) smallest = left;
-    if (right < len && worse(heap[right], heap[smallest])) smallest = right;
+    if (left < len && worse(heap[left]!, heap[smallest]!)) smallest = left;
+    if (right < len && worse(heap[right]!, heap[smallest]!)) smallest = right;
     if (smallest === i) break;
 
-    const tmp = heap[i];
-    heap[i] = heap[smallest];
+    const tmp = heap[i]!;
+    heap[i] = heap[smallest]!;
     heap[smallest] = tmp;
     i = smallest;
   }
@@ -260,10 +260,10 @@ function singleMatch(
 /** Ascending, non-empty positions as inclusive [start, end] ranges. */
 function positionsToRanges(positions: number[]): [number, number][] {
   const ranges: [number, number][] = [];
-  let start = positions[0];
+  let start = positions[0]!;
   let end = start;
   for (let i = 1; i < positions.length; i++) {
-    const p = positions[i];
+    const p = positions[i]!;
     if (p === end + 1) {
       end = p;
     } else {
@@ -305,11 +305,11 @@ function joinedMatches(
   let p = 0;
   let start = 0;
   for (let v = 0; v < values.length; v++) {
-    const value = values[v];
+    const value = values[v]!;
     const end = start + value.length;
     const own: number[] = [];
-    for (; p < positions.length && positions[p] <= end; p++) {
-      if (positions[p] < end) own.push(positions[p] - start);
+    for (; p < positions.length && positions[p]! <= end; p++) {
+      if (positions[p]! < end) own.push(positions[p]! - start);
     }
     if (own.length > 0) {
       matches.push({ key: valueKeys[v], value, indices: positionsToRanges(own), score });
@@ -414,12 +414,12 @@ function scoreFields(
   let wholeField = 0;
   let wholeValue = 0;
   for (let fi = 0; fi < fields.length; fi++) {
-    const { values, lowers, masks } = fields[fi];
+    const { values, lowers, masks } = fields[fi]!;
     for (let vi = 0; vi < values.length; vi++) {
-      const mask = masks[vi];
+      const mask = masks[vi]!;
       // Bitmask gate. Strict: a query class is missing. Fuzzy: no overlap.
       if (fuzziness ? (plan.mask & mask) === 0 : (plan.mask & ~mask) !== 0) continue;
-      const s = scoreString(plan, values[vi], lowers[vi], -1, fuzziness);
+      const s = scoreString(plan, values[vi]!, lowers[vi]!, -1, fuzziness);
       if (s > whole) {
         whole = s;
         wholeField = fi;
@@ -437,14 +437,14 @@ function scoreFields(
     let sum = 0;
     let w = 0;
     for (; w < n; w++) {
-      const wp = wordPlans[w];
+      const wp = wordPlans[w]!;
       let best = 0;
       for (let fi = 0; fi < fields.length; fi++) {
-        const { values, lowers, masks } = fields[fi];
+        const { values, lowers, masks } = fields[fi]!;
         for (let vi = 0; vi < values.length; vi++) {
-          const mask = masks[vi];
+          const mask = masks[vi]!;
           if (fuzziness ? (wp.mask & mask) === 0 : (wp.mask & ~mask) !== 0) continue;
-          const s = scoreString(wp, values[vi], lowers[vi], -1, fuzziness);
+          const s = scoreString(wp, values[vi]!, lowers[vi]!, -1, fuzziness);
           if (s > best) {
             best = s;
             if (wins) {
@@ -461,9 +461,9 @@ function scoreFields(
     if (w === n) {
       if (matches && wins) {
         for (let i = 0; i < n; i++) {
-          const field = fields[wins[2 * i]];
-          const value = field.values[wins[2 * i + 1]];
-          matches.push(singleMatch(value, wordPlans[i], fuzziness, null, field.key));
+          const field = fields[wins[2 * i]!]!;
+          const value = field.values[wins[2 * i + 1]!]!;
+          matches.push(singleMatch(value, wordPlans[i]!, fuzziness, null, field.key));
         }
       }
       return sum / n;
@@ -471,20 +471,20 @@ function scoreFields(
   }
 
   if (matches) {
-    const field = fields[wholeField];
-    matches.push(singleMatch(field.values[wholeValue], plan, fuzziness, null, field.key));
+    const field = fields[wholeField]!;
+    matches.push(singleMatch(field.values[wholeValue]!, plan, fuzziness, null, field.key));
   }
   return whole;
 }
 
 function everyWordMatches(fields: Field[], wordPlans: QueryPlan[]): boolean {
   for (const wp of wordPlans) {
-    const word = wp.lowerWords[0];
+    const word = wp.lowerWords[0]!;
     let found = false;
     for (let fi = 0; fi < fields.length && !found; fi++) {
-      const { lowers, masks } = fields[fi];
+      const { lowers, masks } = fields[fi]!;
       for (let vi = 0; vi < lowers.length && !found; vi++) {
-        found = (wp.mask & ~masks[vi]) === 0 && matchesStrict(lowers[vi], word);
+        found = (wp.mask & ~masks[vi]!) === 0 && matchesStrict(lowers[vi]!, word);
       }
     }
     if (!found) return false;
@@ -512,7 +512,7 @@ function collectValues(obj: unknown, segments: string[], segIdx: number, list: s
   // Indexing a primitive gives undefined, so only null/undefined need a guard
   if (obj == null) return list;
 
-  const value = (obj as Record<string, unknown>)[segments[segIdx]];
+  const value = (obj as Record<string, unknown>)[segments[segIdx]!];
   if (value === null || value === undefined) return list;
 
   const isLast = segIdx === segments.length - 1;
