@@ -18,7 +18,7 @@ See [README.md](./packages/core/README.md) for API documentation.
 - **Cold start** (first search, nothing built): seaq is 3.8x faster than MiniSearch, 10x faster than Fuse.js and 24x faster than Lunr. fuzzysort (4.3x) and uFuzzy (4.1x) are faster than seaq. At its default threshold, fuzzysort returns 0 results for the benchmark query `"nath fe"`, so its time measures a fast rejection.
 - **Repeated search on static data**: MiniSearch and Lunr answer word queries 200-1,700x faster than seaq's index. fuzzysort's `snapshot()` is 3.6x faster than seaq on `"na"` and 9.4x faster on simulated typing. seaq's index is 1.4-6.0x faster than scanning, depending on the query.
 - **Nested data cold start**: seaq is 7.9-8.8x faster than MiniSearch and 10.7-11.5x faster than Fuse.js because it needs no data flattening or index build.
-- **includeMatches** costs under 5%.
+- **`includeMatches`** added under 5% in the measured unindexed search over 10K contacts, returning the top 10 results.
 - **`limit: 10`** is 1.15x faster than returning every match and slicing the first 10.
 
 ---
@@ -102,14 +102,14 @@ seaq is 8.4x faster than MiniSearch and 22x faster than Fuse.js in cold-start sc
 
 ### No-Keys Mode (10K items)
 
-When searching without specifying keys, seaq auto-detects searchable fields.
+Without keys, seaq matches each object against its JSON, property names included.
 
 | Mode | ops/s | mean (ms) |
 |------|------:|----------:|
 | String array (10K pre-joined strings) | 1,190 | 0.84 |
 | Object array (10K contacts, all fields) | 95 | 10.56 |
 
-Searching a plain string array is 13x faster than auto-scanning all object fields, because each object is matched against its whole JSON representation.
+Searching a plain string array is 13x faster, because each object is matched against its whole JSON representation.
 
 ---
 
@@ -155,7 +155,7 @@ Each library's index is built once, outside the benchmark loop. For fuzzysort, t
 
 All values are ops/s. \* fuzzysort returns 0 results for these queries at its default threshold. Its snapshot rejects the whole dataset in well under a microsecond, so these numbers don't measure a real search.
 
-seaq's index makes these searches 1.4-6.0x faster than scanning. It records which characters each contact contains, so a search only scores contacts that can make the top 10. A long fuzzy query like `"natasha okeefe"` can't rule out much, so it gains the least. With `fuzziness: 0`, the index answers `"nath fe"` in 15 µs (64,873 ops/s).
+seaq's index makes these searches 1.4-6.0x faster than scanning. The index caches prepared text and character classes. It skips candidates whose score bounds cannot reach the current cutoff, but still scores some candidates that ultimately fall outside the top 10. Non-ASCII characters share one class, so filtering is less selective for other scripts. A long fuzzy query like `"natasha okeefe"` can't rule out much, so it gains the least. With `fuzziness: 0`, the index answers `"nath fe"` in 15 µs (64,873 ops/s).
 
 MiniSearch and Lunr are still 200-1,700x faster than seaq here: an inverted index looks words up instead of scoring characters. fuzzysort is 3.6x faster on `"na"`. uFuzzy, which scans without an index, beats seaq's index on the longer queries. If your data is large and static and raw repeated-query speed matters most, use an indexed library.
 
@@ -235,7 +235,7 @@ Joined mode (the default) is 1.5x faster on 10K contacts and 1.1x faster on book
 | false | 517 | 1.93 |
 | true | 518 | 1.93 |
 
-**Under 5% in either mode** (4% joined, no measurable difference separate in this run). Match positions are only computed for the final top results, so the cost doesn't grow with the list.
+**Under 5% in either mode** (4% joined, no measurable difference separate in this run). Match positions are only computed for the final top results. Highlighting work depends on the returned results and their field lengths. Returning more results increases that work.
 
 ---
 
@@ -272,7 +272,7 @@ Key observations:
 
 ## Nested Object and Array Performance
 
-seaq natively traverses nested properties (`company.name`) and arrays (`emails.address`). Other libraries require pre-flattening the data. In the search-only tables, seaq runs with defaults, so the benchmark loop uses its index.
+seaq natively traverses nested properties (`company.name`) and arrays (`emails.address`). Fuse.js also takes nested keys. In these benchmarks MiniSearch gets pre-flattened data; it can also read nested fields through a custom `extractField`. In the search-only tables, seaq runs with defaults, so the benchmark loop uses its index.
 
 ### Nested Property Search: `company.name` (search-only, index pre-built)
 

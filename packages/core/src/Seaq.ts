@@ -53,13 +53,13 @@ export interface SeaqOptions<T> {
    */
   keys?: Array<Extract<keyof T, string>> | string[];
   /**
-   * Tolerance for characters that aren't in the item at all (typos like
-   * "stephin" for "Stephen"), from 0 to 1. Values outside that range are
+   * Tolerance for query characters that can't be matched in order (typos
+   * like "stephin" for "Stephen", extra letters), from 0 to 1. Values outside that range are
    * clamped. Shorthand ("steplau"), acronyms, adjacent swaps ("jonh" →
    * "john") and any word order match at every setting.
    *
-   * - `0.2` (default) — light tolerance: missing characters allowed, scored lower
-   * - `0` — every query character must be found. Fastest.
+   * - `0.2` (default) — light tolerance: unmatched characters allowed, scored lower
+   * - `0` — every query character must be matched. Fastest.
    * - `0.5` — moderate tolerance
    * - `0.8–1` — very loose, matches almost anything (rarely useful)
    */

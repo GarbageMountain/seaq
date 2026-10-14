@@ -104,18 +104,18 @@ seaq(contacts, 'john smith', { keys: ['firstName', 'lastName'] });
 
 ### Other languages
 
-seaq matches Unicode text, so it isn't limited to English: Cyrillic, Greek, Arabic, Hebrew, Hindi, Korean, Chinese, Japanese, emoji and so on all match and highlight correctly.
+seaq searches Unicode text, so it isn't limited to English: Cyrillic, Greek, Arabic, Korean, Chinese, Japanese and other scripts work.
 
 ```typescript
 seaq(['Лев Толстой', 'Антон Чехов'], 'толст'); // ['Лев Толстой']
 seaq(['北京市', '北京大学', '南京大学'], '北大'); // ['北京大学', '北京市']
 ```
 
-Your mileage may vary, though. Ranking was tuned on English, and a few things are deliberately simple:
+Ranking was tuned on English. Word-start bonuses (for acronyms like "NYC") use the start of the text and ordinary spaces, without language-specific word segmentation, so text without spaces between words gets no bonus inside it. Swaps and typo tolerance work as usual.
 
-- Word starts (for acronyms like "NYC") are found after spaces, so Chinese, Japanese and Thai get plain in-order matching without that bonus.
-- Accents aren't ignored ("jose" finds "José" only as a weaker fuzzy match), and text isn't Unicode-normalized.
-- There's no transliteration: "beijing" won't find "北京", and hiragana won't match katakana.
+Text isn't Unicode-normalized, and seaq doesn't fold accents ("jose" finds "José" only as a weaker fuzzy match), transliterate ("beijing" won't find "北京"), convert between hiragana and katakana, or match Korean initial consonants ("ㄱㄴ" won't find "강남").
+
+Highlight ranges are inclusive JavaScript (UTF-16) offsets. They never split a character outside the BMP in half, but they can cover only part of a sequence that displays as one character: an accent stored as a separate combining mark, or one person in a combined emoji like 👩‍💻.
 
 ### Match highlighting
 
@@ -136,17 +136,17 @@ const results = seaq(contacts, 'john smith', {
 // }]
 ```
 
-Match positions are only computed for the returned results, so `includeMatches` costs under 5% (see [BENCHMARKS.md](https://github.com/billie-coop/seaq/blob/main/BENCHMARKS.md#includematches-overhead)).
+Match positions are only computed for the returned results. In the benchmark (an unindexed search of 10K contacts, top 10 results), `includeMatches` cost under 5% (see [BENCHMARKS.md](https://github.com/billie-coop/seaq/blob/main/BENCHMARKS.md#includematches-overhead)); with more results returned, it costs more.
 
 ### Repeated searches (typeahead)
 
 You don't set anything up for a search box. The first search of an array just scans it. The second search of the same array builds an index, and later searches reuse it:
 
-- **Only promising items get scored.** The index records which letters each item contains. Strict searches (`fuzziness: 0`) only score items that contain every letter in the query. Fuzzy searches skip items whose missing letters cap their score below what's already in the top results.
+- **Some items are ruled out without scoring.** The index records which character classes each item contains: one per letter a–z, five for digits, and one shared by everything else (all non-ASCII characters included). Strict searches (`fuzziness: 0`) skip items missing a class the query uses. Fuzzy searches skip items whose missing classes cap their score below what's already in the top results. The classes can't tell non-ASCII characters apart, so for other scripts the index rules out much less, and the numbers below (English names) don't carry over.
 - **Typing gets cheaper.** In strict mode, when the query extends the previous one ("nat" → "nata"), only the previous matches are re-checked.
 - **Results are identical** to a search without the index.
 
-On 10K contacts, a default search for `"nath fe"` takes 2.3 ms without the index and 0.38 ms with it; with `fuzziness: 0` it takes 15 µs. Building the index costs no more than one search without it. It uses about 1 MB of memory per 10K contacts.
+In the benchmark on 10K contacts, a default search for `"nath fe"` took 2.3 ms without the index and 0.38 ms with it; with `fuzziness: 0` it took 15 µs. Building the index and searching cost about the same as one search without it. The index used about 1 MB of memory per 10K contacts.
 
 The index is keyed on the array in a `WeakMap`, so it's garbage-collected with the list. Adding, removing or replacing items is detected automatically. **Mutating an item in place is not detected** once the array is indexed: replace the object (`list[i] = { ...item, name }`), or pass `cache: false`. A new array each render (e.g. `items.filter(...)`) is a new list, so it's scanned like any first search.
 
@@ -173,10 +173,10 @@ Returns a new array of matching items sorted by relevance (highest score first).
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `keys` | `string[]` | -- | Fields to search. Supports dot notation for nested properties (`'address.city'`) and automatic array traversal (`'emails.address'`). Omit when searching a plain `string[]`; without `keys`, non-string items are matched against their JSON representation. |
-| `fuzziness` | `number` | `0.2` | Tolerance for characters that aren't in the item at all, from 0 to 1 (clamped). `0.2` = light typo tolerance: missing characters are allowed and scored lower. `0` = every query character must exist (fastest). `0.5` = moderate. `0.8`+ = very loose. Shorthand (`steplau`), acronyms, adjacent swaps (`laguht`) and any word order match at every setting. |
-| `fieldMode` | `'joined' \| 'separate'` | `'joined'` | `'joined'` concatenates all field values into one string before scoring -- supports cross-field queries like "john smith" matching firstName + lastName. `'separate'` scores each field independently and takes the best. Ignored for plain string arrays. |
+| `fuzziness` | `number` | `0.2` | Tolerance for query characters that can't be matched in order (typos, extra letters like `johnn` for `john`), from 0 to 1 (clamped). `0.2` = light typo tolerance: unmatched characters are allowed and scored lower. `0` = every query character must be matched (fastest). `0.5` = moderate. `0.8`+ = very loose. Shorthand (`steplau`), acronyms, adjacent swaps (`laguht`) and any word order match at every setting. |
+| `fieldMode` | `'joined' \| 'separate'` | `'joined'` | `'joined'` concatenates all field values into one string before scoring -- supports cross-field queries like "john smith" matching firstName + lastName. `'separate'` scores each field value on its own and keeps the best; different query words can still match different fields, but one word can't span two. Ignored for plain string arrays. |
 | `limit` | `number` | `10` | Maximum results to return. Uses a min-heap internally for O(n log k) selection, faster than full-sorting then slicing. Set to `Infinity` to return all matches; `0` or negative returns `[]`. |
-| `threshold` | `number` | `0.3` | Relative score cutoff. Results scoring below `topScore * threshold` are dropped. `0` = no filtering (return everything with score > 0). `1` = only near-perfect matches. Note: higher = stricter -- the opposite polarity of Fuse.js's `threshold`. |
+| `threshold` | `number` | `0.3` | Relative score cutoff. Results scoring below `topScore * threshold` are dropped. `0` = no filtering (return everything with score > 0). `1` = only results tied with the best score, however low it is. Note: higher = stricter -- the opposite polarity of Fuse.js's `threshold`. |
 | `includeMatches` | `boolean` | `false` | When `true`, returns `SeaqResult<T>` objects with per-field match metadata (character positions, matched value, per-match score) instead of plain items. |
 | `cache` | `boolean` | -- | Unset: an array is indexed on its second search. `true`: indexed on the first search. `false`: never indexed. Results are identical either way. Items mutated in place aren't detected once indexed -- replace them instead. See [Repeated searches](#repeated-searches-typeahead). |
 
@@ -205,9 +205,9 @@ interface SeaqMatch {
 | Fuzzy/typo tolerance | yes | no | yes | partial | yes | partial |
 | Partial/prefix match | yes | yes | yes | yes | yes | yes |
 | Acronym bonus | yes | yes | weak | no | no | no |
-| Nested object access | yes | yes | yes | no | no | no |
+| Nested object access | yes | yes | yes | via `extractField` | no | via `extractor` |
 | Array field traversal | **yes** | via getter | partial | no | no | no |
-| Cross-field matching | yes | yes | no | no | no | no |
+| Cross-field matching | yes | yes | via logical query | yes (per word) | no | yes (per word) |
 | Match highlighting | yes | yes | yes | yes | yes | no |
 | Index | automatic | optional | required | required | no | required |
 | Zero dependencies | yes | yes | yes | yes | yes | yes |
@@ -218,7 +218,7 @@ interface SeaqMatch {
 
 - You want zero setup -- no constructor, no addAll, no index step; one function call
 - Users type shorthand, initials, swapped letters or small typos
-- Your list is dynamic -- data changes each render, so index-based libs waste time rebuilding
+- Your list is dynamic -- new data each render, where an index built up front would have to be rebuilt or updated
 - You need to search nested objects or arrays without manual flattening
 - Acronym matching matters (e.g., "NYC" matching "New York City")
 - Your list size is unpredictable -- works from 20 items to 20,000 without API changes

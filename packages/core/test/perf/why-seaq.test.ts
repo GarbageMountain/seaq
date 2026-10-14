@@ -608,7 +608,7 @@ describe('SCENARIO 5: Nested object search (zero prep)', () => {
       `  fuzzysort:  ${fsR.map((r) => r.obj.name).join(', ')} (${fsR.length} results) [array needs getter]`,
     );
 
-    // minisearch — must flatten first
+    // minisearch — this example flattens the fields
     const flatCrm = crmContacts.map((c, id) => ({
       id,
       companyName: c.company.name,
@@ -618,7 +618,7 @@ describe('SCENARIO 5: Nested object search (zero prep)', () => {
     ms.addAll(flatCrm);
     const miniR = ms.search('acme', { prefix: true, fuzzy: 0.2 });
     console.log(
-      `  minisearch: ${miniR.map((r) => crmContacts[r.id as number].name).join(', ')} (${miniR.length} results) [required flattening]`,
+      `  minisearch: ${miniR.map((r) => crmContacts[r.id as number].name).join(', ')} (${miniR.length} results) [flattened in this example]`,
     );
 
     // ufuzzy — must build a haystack string

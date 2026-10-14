@@ -354,7 +354,7 @@ function SeaqControls({
           { value: '0.3', label: '0.3 (default)' },
           { value: '0.5', label: '0.5' },
           { value: '0.7', label: '0.7' },
-          { value: '1', label: '1 (exact only)' },
+          { value: '1', label: '1 (best score only)' },
         ]}
         onChange={(v) => onChange({ threshold: Number(v) })}
       />

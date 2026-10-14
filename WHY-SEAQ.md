@@ -148,7 +148,7 @@ fuzzysort.go("acme", contacts, {
   keys: ["company.name", c => c.emails.map(e => e.address).join(" ")],
 })
 
-// MiniSearch -- must flatten first
+// MiniSearch -- this example flattens the fields
 const flat = contacts.map((c, id) => ({
   id,
   companyName: c.company.name,
@@ -165,6 +165,9 @@ const hay = contacts.map(c =>
 new uFuzzy().search(hay, "acme");
 ```
 
+MiniSearch can alternatively read nested fields through a custom `extractField`
+function.
+
 seaq traverses dot-notation paths and arrays natively. No flattening, no string
 concatenation, no data transformation step.
 
@@ -173,8 +176,9 @@ concatenation, no data transformation step.
 ## 6. Dynamic data
 
 When data changes between searches -- live feeds, paginated API results, data
-that changes every render -- indexed libraries rebuild their index every time.
-That index cost is wasted.
+that changes every render -- an index built up front has to be rebuilt or
+updated. In this benchmark, MiniSearch and Fuse.js build a new index for each
+new dataset; seaq just scans it.
 
 ### 500 items, dataset alternates each search
 
@@ -186,8 +190,9 @@ That index cost is wasted.
 | MiniSearch | 400 us |   12.0x |
 | Fuse.js    | 706 us |   21.3x |
 
-seaq only indexes an array it has seen before, so new data is simply scanned.
-Nothing is built that won't be reused.
+The seaq row passes `cache: false`. With the default, seaq indexes an array on
+its second search, so a new array each render is simply scanned and nothing is
+built that won't be reused.
 
 ---
 
@@ -233,10 +238,9 @@ fuzzysort's snapshot only re-checks the previous matches when the query grows by
 a keystroke; seaq does that only with `fuzziness: 0`, because a typo-tolerant
 search can match items the previous query didn't.
 
-But look at seaq's absolute time: **0.57 ms per keystroke**. That is well under
-the 16 ms frame budget for 60fps UI. The user will not notice. seaq is slower
-in relative terms, but fast enough in absolute terms for any interactive use
-case.
+But look at seaq's absolute time: **0.57 ms per keystroke** on this machine
+(Node.js on Apple Silicon), well under the 16 ms frame budget for 60fps UI.
+Slower devices will take longer, so measure on the ones you target.
 
 The question is not "which is fastest?" It is "do I need to manage an index for
 this?"
