@@ -48,6 +48,12 @@ describe('characters outside the BMP (two UTF-16 units)', () => {
     }
   });
 
+  test('a capital typed outside the BMP earns the case bonus (Deseret 𐐀/𐐨)', () => {
+    const [capital] = seaq(['𐐀 foo'], '𐐀', { includeMatches: true });
+    const [small] = seaq(['𐐀 foo'], '𐐨', { includeMatches: true });
+    expect(capital?.score).toBeGreaterThan(small?.score ?? 1);
+  });
+
   test('can be swapped', () => {
     const [result] = seaq(['😀🍕 party'], '🍕😀', { fuzziness: 0, includeMatches: true });
     expect(result?.matches[0]?.indices).toEqual([[0, 3]]);

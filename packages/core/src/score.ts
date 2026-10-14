@@ -120,8 +120,8 @@ const charScore = (lower: string, pos: number, startAt: number, prevFound: boole
 
 // Only matching capitals typed in the query earn a case bonus.
 function caseBonus(raw: string, pos: number, word: string, lowerWord: string, i: number): number {
-  const typed = word.charCodeAt(i);
-  return typed !== lowerWord.charCodeAt(i) && raw.charCodeAt(pos) === typed ? CASE : 0;
+  const typed = word.codePointAt(i);
+  return typed !== lowerWord.codePointAt(i) && raw.codePointAt(pos) === typed ? CASE : 0;
 }
 
 /**
