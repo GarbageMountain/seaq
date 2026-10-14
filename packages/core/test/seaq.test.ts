@@ -413,19 +413,19 @@ describe('threshold option', () => {
       limit: Infinity,
       threshold: 0,
     });
-    // Should return the huge count we used to get
     expect(results.length).toBeGreaterThan(1000);
   });
 
-  test('threshold: 1 returns only exact/near-exact matches', () => {
-    const results = seaq(['Nathan', 'Nathaniel', 'Jonathan', 'math', 'bath'], 'nath', {
-      fuzziness: 0,
-      limit: Infinity,
-      threshold: 1,
-    });
-    // Only the best-scoring items survive (score must equal maxScore)
-    expect(results.length).toBeGreaterThan(0);
-    expect(results.length).toBeLessThanOrEqual(2);
+  test('threshold: 1 keeps only results tied with the best score', () => {
+    const list = ['Nathan', 'Nathaniel', 'Jonathan', 'math', 'bath'];
+    const options = { fuzziness: 0, limit: Infinity, includeMatches: true } as const;
+    const all = seaq(list, 'nath', { ...options, threshold: 0 });
+    const best = seaq(list, 'nath', { ...options, threshold: 1 });
+    expect(best.map((r) => r.item)).toEqual(
+      all.filter((r) => r.score === all[0]?.score).map((r) => r.item),
+    );
+    // Even a weak best match is kept
+    expect(seaq(['José'], 'jose', { threshold: 1 })).toEqual(['José']);
   });
 
   test('threshold works with includeMatches', () => {
@@ -497,10 +497,7 @@ describe('default limit', () => {
   });
 });
 
-// ─── Real-world search patterns ─────────────────────────────────────
-// Tests from an end-user perspective: what you type → what you expect.
-// All use default options (separate mode, fuzziness 0.2, threshold 0.3)
-// unless noted, since that's what users experience out of the box.
+// What you type → what you expect, with default options unless noted
 
 describe('multi-word contact search', () => {
   const people = [

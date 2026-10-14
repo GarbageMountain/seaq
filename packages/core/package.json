@@ -47,6 +47,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --exclude 'test/perf/**'",
     "benchmark": "vitest bench",
+    "report": "vitest run --config vitest.reports.config.ts",
     "bench:save": "vitest bench --outputJson benchmarks/$(git rev-parse --short HEAD).json"
   },
   "devDependencies": {

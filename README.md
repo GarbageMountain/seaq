@@ -38,6 +38,7 @@ yarn install
 yarn build          # build all packages
 yarn test           # run all tests
 yarn coverage       # core unit tests; fails below 100% coverage of packages/core/src
+yarn report         # comparison tables behind WHY-SEAQ.md (slow; not part of yarn test)
 yarn ts-check       # type-check the whole repo
 yarn check          # biome lint
 yarn dev            # build core in watch mode + run docs site

@@ -4,12 +4,12 @@ seaq is a fuzzy search function. One function call, zero dependencies, no index
 to manage.
 
 This document is grounded in real benchmark numbers from
-[`test/perf/why-seaq.test.ts`](packages/core/test/perf/why-seaq.test.ts),
+[`test/reports/why-seaq.test.ts`](packages/core/test/reports/why-seaq.test.ts),
 tested against fuzzysort, Fuse.js, MiniSearch, uFuzzy, and Lunr. All timings are medians
 of 80 runs after a 20-run warmup, on Node.js 24.20.0 (Apple Silicon). You can reproduce them yourself:
 
 ```
-yarn workspace seaq vitest run test/perf/why-seaq.test.ts
+yarn workspace seaq report why-seaq
 ```
 
 The thesis: **seaq is competitive at any scale with zero setup. Your data can
@@ -70,7 +70,7 @@ seaq gives explicit bonuses when query characters match the first letter of
 each word. When the earliest match for a letter is mid-word (the "d" at the end
 of "Integrated"), seaq also tries jumping to the next word start ("Development")
 and keeps the better score. fuzzysort scores word-start matches the same way.
-On the larger 14-query acronym suite in `acronym-quality.test.ts`, both find
+On the larger 14-query acronym set (`yarn workspace seaq report acronyms`), both find
 14/14: seaq ranks all 14 first and fuzzysort ranks 13 first. Fuse.js,
 MiniSearch and uFuzzy do not model acronyms.
 
