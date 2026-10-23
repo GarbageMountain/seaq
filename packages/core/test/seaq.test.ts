@@ -12,7 +12,6 @@ describe('small collection', () => {
   test('multi-field search', () => {
     const searchResults = seaq(Contacts, 'ray stev', {
       keys: ['givenName', 'familyName'],
-      fieldMode: 'joined',
       fuzziness: 0,
     });
     expect(searchResults).toHaveLength(1);
@@ -73,7 +72,6 @@ describe('large collection', () => {
   test('multi-field search', () => {
     const searchResults = seaq(ManyContacts, 'nath ev', {
       keys: ['givenName', 'familyName'],
-      fieldMode: 'joined',
       fuzziness: 0,
       limit: Infinity,
       threshold: 0,
@@ -118,7 +116,6 @@ describe('large collection', () => {
   test('nested property search', () => {
     const searchResults = seaq(ManyContacts, 'julie', {
       keys: ['emailAddresses.email', 'phoneNumbers.number'],
-      fieldMode: 'joined',
       fuzziness: 0,
       limit: Infinity,
       threshold: 0,
@@ -214,14 +211,12 @@ describe('limit option', () => {
     // Use a query that produces more distinct scores
     const allResults = seaq(ManyContacts, 'nath fe', {
       keys: ['givenName', 'familyName'],
-      fieldMode: 'joined',
       fuzziness: 0,
       limit: Infinity,
       threshold: 0,
     });
     const limitResults = seaq(ManyContacts, 'nath fe', {
       keys: ['givenName', 'familyName'],
-      fieldMode: 'joined',
       fuzziness: 0,
       limit: 1,
       threshold: 0,
@@ -231,34 +226,23 @@ describe('limit option', () => {
   });
 });
 
-describe('fieldMode option', () => {
+describe('multiple keys', () => {
   const contacts = [
     { firstName: 'John', lastName: 'Smith' },
     { firstName: 'Jane', lastName: 'Doe' },
     { firstName: 'Johnny', lastName: 'Appleseed' },
   ];
 
-  test('joined mode - matches across fields', () => {
+  test('a query can match across fields', () => {
     const results = seaq(contacts, 'john smith', {
       keys: ['firstName', 'lastName'],
-      fieldMode: 'joined',
       fuzziness: 0,
     });
     expect(results).toHaveLength(1);
     expect(results[0]).toMatchObject({ firstName: 'John', lastName: 'Smith' });
   });
 
-  test('separate mode (default) - multi-word matches across fields via token scoring', () => {
-    const results = seaq(contacts, 'john smith', {
-      keys: ['firstName', 'lastName'],
-      fuzziness: 0,
-    });
-    // Token scoring: "john" matches firstName, "smith" matches lastName
-    expect(results.length).toBeGreaterThan(0);
-    expect(results[0]).toMatchObject({ firstName: 'John', lastName: 'Smith' });
-  });
-
-  test('separate mode - single word matches', () => {
+  test('one word matches one field', () => {
     const results = seaq(contacts, 'john', {
       keys: ['firstName', 'lastName'],
       fuzziness: 0,
@@ -282,35 +266,18 @@ describe('includeMatches', () => {
     expect(results[0].matches[0].indices).toEqual([[0, 2]]);
   });
 
-  test('object with keys — joined mode', () => {
+  test('object with keys — matches per field', () => {
     const contacts = [{ firstName: 'John', lastName: 'Smith' }];
     const results = seaq(contacts, 'john', {
       keys: ['firstName', 'lastName'],
-      fieldMode: 'joined',
       includeMatches: true,
       fuzziness: 0,
     });
     expect(results).toHaveLength(1);
     expect(results[0].item).toEqual({ firstName: 'John', lastName: 'Smith' });
-    // Joined mode returns per-field matches with key set and field-relative indices
     expect(results[0].matches).toHaveLength(1);
     expect(results[0].matches[0].key).toBe('firstName');
     expect(results[0].matches[0].value).toBe('John');
-    expect(results[0].matches[0].indices).toEqual([[0, 3]]);
-  });
-
-  test('object with keys — separate mode includes key', () => {
-    const contacts = [{ givenName: 'Nathan', familyName: 'Fern' }];
-    const results = seaq(contacts, 'nath', {
-      keys: ['givenName', 'familyName'],
-      fieldMode: 'separate',
-      includeMatches: true,
-      fuzziness: 0,
-    });
-    expect(results).toHaveLength(1);
-    expect(results[0].matches).toHaveLength(1);
-    expect(results[0].matches[0].key).toBe('givenName');
-    expect(results[0].matches[0].value).toBe('Nathan');
     expect(results[0].matches[0].indices).toEqual([[0, 3]]);
   });
 
@@ -780,7 +747,6 @@ describe('token scoring edge cases', () => {
   });
 
   test('one token matches nothing — reduced score but still found', () => {
-    // "helen xyz" — "helen" scores high, "xyz" scores 0, average = helen_score / 2
     const results = seaq(people, 'helen xyz', {
       keys,
       fuzziness: 0.2,
@@ -788,162 +754,6 @@ describe('token scoring edge cases', () => {
       threshold: 0,
     });
     expect(results.some((r) => r.first === 'Helen' && r.last === 'Green')).toBe(true);
-  });
-});
-
-// Separate mode scores the whole query against each field value, and for
-// multi-word queries also each word against its best value (the average
-// wins when higher)
-describe('separate mode: whole query vs per word', () => {
-  test('per word wins for a cross-field query', () => {
-    const people = [{ first: 'Helen', last: 'Green' }];
-    const results = seaq(people, 'helen green', {
-      keys: ['first', 'last'],
-      fieldMode: 'separate',
-      includeMatches: true,
-      fuzziness: 0,
-    }) as SeaqResult<(typeof people)[0]>[];
-    expect(results).toHaveLength(1);
-    // Lowercase typing earns no case bonus, so not quite 1
-    expect(results[0].score).toBeGreaterThan(0.8);
-    // One match per word
-    expect(results[0].matches.length).toBe(2);
-  });
-
-  test('highlights of per-word winners are inside their values', () => {
-    const people = [{ first: 'Helen', last: 'Green' }];
-    const results = seaq(people, 'helen green', {
-      keys: ['first', 'last'],
-      fieldMode: 'separate',
-      includeMatches: true,
-      fuzziness: 0,
-    }) as SeaqResult<(typeof people)[0]>[];
-    expect(results).toHaveLength(1);
-    for (const match of results[0].matches) {
-      for (const [start, end] of match.indices) {
-        const sliced = match.value.slice(start, end + 1);
-        expect(sliced.length).toBeGreaterThan(0);
-      }
-    }
-  });
-
-  test('per word stops early once it cannot beat the whole query', () => {
-    // Short words score low against the long value, so after two words even
-    // a perfect third can't lift the average above the whole-query score
-    const items = [{ whole: 'az bz cz extra' }];
-    const results = seaq(items, 'az bz cz', {
-      keys: ['whole'],
-      fieldMode: 'separate',
-      includeMatches: true,
-      fuzziness: 0,
-      limit: Infinity,
-      threshold: 0,
-    }) as SeaqResult<(typeof items)[0]>[];
-    expect(results).toHaveLength(1);
-    // The whole query won: one match, not three
-    expect(results[0].matches.length).toBe(1);
-    expect(results[0].score).toBeGreaterThan(0.75);
-  });
-
-  test('fuzzy: values sharing no character with the query are skipped', () => {
-    const items = [{ name: 'abc', tag: 'xyz' }];
-    const single = seaq(items, 'abc', {
-      keys: ['name', 'tag'],
-      fieldMode: 'separate',
-      fuzziness: 0.5,
-      limit: Infinity,
-      threshold: 0,
-    });
-    expect(single).toHaveLength(1);
-
-    const multi = seaq(items, 'abc xyz', {
-      keys: ['name', 'tag'],
-      fieldMode: 'separate',
-      fuzziness: 0.5,
-      limit: Infinity,
-      threshold: 0,
-    });
-    expect(multi).toHaveLength(1);
-  });
-
-  test('a perfect whole-query score skips the per-word pass', () => {
-    const items = [{ name: 'helen green' }];
-    const results = seaq(items, 'helen green', {
-      keys: ['name'],
-      fieldMode: 'separate',
-      fuzziness: 0,
-      limit: Infinity,
-      threshold: 0,
-    });
-    expect(results).toHaveLength(1);
-  });
-
-  test('a word with the right characters in the wrong order is rejected', () => {
-    // "cba" has the same characters as "abc" but isn't an in-order match,
-    // even allowing adjacent swaps
-    const items = [{ name: 'abc' }];
-    const results = seaq(items, 'abc cba', {
-      keys: ['name'],
-      fieldMode: 'separate',
-      fuzziness: 0,
-      limit: Infinity,
-      threshold: 0,
-    });
-    expect(results).toHaveLength(0);
-  });
-
-  test('per word wins without includeMatches', () => {
-    const people = [{ first: 'Helen', last: 'Green' }];
-    const results = seaq(people, 'helen green', {
-      keys: ['first', 'last'],
-      fieldMode: 'separate',
-      fuzziness: 0,
-      limit: Infinity,
-      threshold: 0,
-    });
-    expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({ first: 'Helen', last: 'Green' });
-  });
-
-  test('a word keeps its best value when a later value scores lower', () => {
-    const items = [{ a: 'helen', b: 'helena', c: 'green' }];
-    const results = seaq(items, 'helen green', {
-      keys: ['a', 'b', 'c'],
-      fieldMode: 'separate',
-      fuzziness: 0,
-      limit: Infinity,
-      threshold: 0,
-    });
-    expect(results).toHaveLength(1);
-  });
-
-  test('per word can finish every word and still lose to the whole query', () => {
-    const items = [{ whole: 'az bz extra' }];
-    const results = seaq(items, 'az bz', {
-      keys: ['whole'],
-      fieldMode: 'separate',
-      fuzziness: 0,
-      limit: Infinity,
-      threshold: 0,
-      includeMatches: true,
-    }) as SeaqResult<(typeof items)[0]>[];
-    expect(results).toHaveLength(1);
-    expect(results[0].matches.length).toBe(1); // the whole query won
-  });
-
-  test('single-word queries have no per-word pass', () => {
-    const people = [
-      { first: 'Helen', last: 'Green' },
-      { first: 'Henry', last: 'Greenberg' },
-    ];
-    const results = seaq(people, 'helen', {
-      keys: ['first', 'last'],
-      fuzziness: 0,
-      limit: Infinity,
-      threshold: 0,
-    });
-    expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({ first: 'Helen' });
   });
 });
 

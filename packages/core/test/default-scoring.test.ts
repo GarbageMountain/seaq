@@ -99,7 +99,7 @@ describe('word order', () => {
     ]);
   });
 
-  test('works across keys in joined mode', () => {
+  test('works across keys', () => {
     const contacts = [
       { first: 'Stephen', last: 'Laughton' },
       { first: 'Lauren', last: 'Stephens' },

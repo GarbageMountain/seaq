@@ -6,7 +6,7 @@ to manage.
 This document is grounded in real benchmark numbers from
 [`test/reports/why-seaq.test.ts`](packages/core/test/reports/why-seaq.test.ts),
 tested against fuzzysort, Fuse.js, MiniSearch, uFuzzy, and Lunr. All timings are medians
-of 80 runs after a 20-run warmup, on Node.js 24.20.0 (Apple Silicon). You can reproduce them yourself:
+of 80 runs after a 20-run warmup, on Node.js 24.22.1 (Apple Silicon). You can reproduce them yourself:
 
 ```
 yarn workspace seaq report why-seaq
@@ -28,20 +28,20 @@ library answers in microseconds.
 | Library    | Time  | vs best |
 |------------|------:|--------:|
 | seaq       |  4 us |    1.0x |
-| fuzzysort  |  6 us |    1.4x |
-| uFuzzy     | 13 us |    2.9x |
-| Fuse.js    | 17 us |    3.9x |
-| MiniSearch | 28 us |    6.5x |
+| fuzzysort  |  6 us |    1.3x |
+| uFuzzy     | 10 us |    2.2x |
+| Fuse.js    | 16 us |    3.7x |
+| MiniSearch | 24 us |    5.5x |
 
 ### File picker: "btn" across 21 file paths
 
 | Library    | Time  | vs best | Found `Button.tsx`? |
 |------------|------:|--------:|:-------------------:|
 | seaq       |  3 us |    1.0x | Yes                 |
-| uFuzzy     |  6 us |    2.0x | No                  |
-| fuzzysort  |  6 us |    2.1x | No                  |
-| Fuse.js    | 17 us |    6.1x | No                  |
-| MiniSearch | 22 us |    8.0x | No                  |
+| fuzzysort  |  4 us |    1.5x | No                  |
+| uFuzzy     |  5 us |    1.9x | No                  |
+| Fuse.js    | 16 us |    5.6x | No                  |
+| MiniSearch | 24 us |    8.3x | No                  |
 
 On lists this small every library answers in microseconds, and seaq is fastest
 on both. seaq is the only library
@@ -85,27 +85,27 @@ seaq runs with `cache: false` here so every run is a true first search.
 
 | Library    |   Time  | vs best |
 |------------|--------:|--------:|
-| uFuzzy     |  264 us |    1.0x |
-| fuzzysort  |  604 us |    2.3x |
-| seaq       | 2.07 ms |    7.8x |
-| MiniSearch | 9.36 ms |   35.4x |
-| Fuse.js    | 14.6 ms |   55.4x |
-| Lunr       | 66.6 ms |  252.3x |
+| uFuzzy     |  279 us |    1.0x |
+| fuzzysort  |  606 us |    2.2x |
+| seaq       | 2.00 ms |    7.2x |
+| MiniSearch | 10.1 ms |   36.3x |
+| Fuse.js    | 15.3 ms |   55.0x |
+| Lunr       | 59.6 ms |  213.8x |
 
 ### 20K cities, searching "san"
 
 | Library    |    Time  | vs best |
 |------------|--------: |--------:|
-| uFuzzy     |  1.04 ms |    1.0x |
-| seaq       |  3.95 ms |    3.8x |
-| fuzzysort  |  6.16 ms |    5.9x |
-| Fuse.js    | 18.6 ms  |   18.0x |
-| MiniSearch | 27.8 ms  |   26.8x |
-| Lunr       |  160 ms  |  153.9x |
+| uFuzzy     |   995 us |    1.0x |
+| seaq       |  3.75 ms |    3.8x |
+| fuzzysort  |  5.85 ms |    5.9x |
+| Fuse.js    | 18.7 ms  |   18.8x |
+| MiniSearch | 28.4 ms  |   28.5x |
+| Lunr       |  169 ms  |  169.6x |
 
 uFuzzy is fastest here because it only searches flat string arrays. seaq and
-fuzzysort trade places: fuzzysort is 3.4x faster on 10K short names, and seaq is
-1.6x faster on 20K cities. seaq is 4.5-40x faster than Fuse.js, MiniSearch, and
+fuzzysort trade places: fuzzysort is 3.3x faster on 10K short names, and seaq is
+1.6x faster on 20K cities. seaq is 5-45x faster than Fuse.js, MiniSearch, and
 Lunr, which pay to build an index they will never reuse. (fuzzysort's
 prepared-target cache is cleared before each run so it starts cold too.)
 
@@ -122,9 +122,9 @@ seaq(cities, "san", { keys: ["name", "state"] })
 | Size       |   Time   | Results |
 |------------|----------|--------:|
 | 20 cities  |     5 us |       1 |
-| 200 cities |    35 us |      10 |
-| 2K cities  |   350 us |      10 |
-| 20K cities |  3.77 ms |      10 |
+| 200 cities |    37 us |      10 |
+| 2K cities  |   334 us |      10 |
+| 20K cities |  3.58 ms |      10 |
 
 These are first searches (`cache: false`). Searching the same list again builds
 an index automatically, so there is still nothing to build, rebuild, or
@@ -184,11 +184,11 @@ new dataset; seaq just scans it.
 
 | Library    |  Time  | vs best |
 |------------|-------:|--------:|
-| uFuzzy     |  33 us |    1.0x |
-| fuzzysort  |  56 us |    1.7x |
-| seaq       |  93 us |    2.8x |
-| MiniSearch | 400 us |   12.0x |
-| Fuse.js    | 706 us |   21.3x |
+| uFuzzy     |  32 us |    1.0x |
+| fuzzysort  |  57 us |    1.8x |
+| seaq       |  93 us |    2.9x |
+| MiniSearch | 421 us |   13.0x |
+| Fuse.js    | 670 us |   20.7x |
 
 The seaq row passes `cache: false`. With the default, seaq indexes an array on
 its second search, so a new array each render is simply scanned and nothing is
@@ -209,12 +209,12 @@ use it. `seaq no index` passes `cache: false` and scans every time.
 | Library       |   Time  | vs best |
 |---------------|--------:|--------:|
 | fuzzysort     |   19 us |    1.0x |
-| MiniSearch    |   22 us |    1.2x |
-| Lunr          |   49 us |    2.7x |
-| uFuzzy        |  269 us |   14.5x |
-| seaq          |  337 us |   18.2x |
-| seaq no index | 2.03 ms |  109.5x |
-| Fuse.js       | 12.0 ms |  649.9x |
+| MiniSearch    |   22 us |    1.1x |
+| Lunr          |   51 us |    2.7x |
+| uFuzzy        |  276 us |   14.4x |
+| seaq          |  366 us |   19.0x |
+| seaq no index | 1.94 ms |  101.2x |
+| Fuse.js       | 11.8 ms |  611.5x |
 
 fuzzysort's index is an immutable `fuzzysort.snapshot()`.
 
@@ -222,23 +222,23 @@ fuzzysort's index is an immutable `fuzzysort.snapshot()`.
 
 | Library       | Total   | Per keystroke |
 |---------------|--------:|--------------:|
-| MiniSearch    |  252 us |        36 us  |
-| fuzzysort     |  397 us |        57 us  |
-| Lunr          |  673 us |        96 us  |
-| uFuzzy        | 2.13 ms |       305 us  |
-| seaq          | 3.99 ms |       570 us  |
-| seaq no index | 14.0 ms |      2.00 ms  |
-| Fuse.js       | 86.8 ms |      12.4 ms  |
+| MiniSearch    |  256 us |        37 us  |
+| fuzzysort     |  398 us |        57 us  |
+| Lunr          |  687 us |        98 us  |
+| uFuzzy        | 2.17 ms |       309 us  |
+| seaq          | 3.92 ms |       560 us  |
+| seaq no index | 13.9 ms |      1.99 ms  |
+| Fuse.js       | 91.2 ms |      13.0 ms  |
 
-seaq's index makes repeated searches 3.5-6x faster than scanning, but MiniSearch
-is still 15-16x faster than seaq when it can reuse its index, and fuzzysort is
-10-18x faster. uFuzzy scans without an index and is still 1.3-1.9x faster than
+seaq's index makes repeated searches 3.5-5.3x faster than scanning, but MiniSearch
+is still 15-17x faster than seaq when it can reuse its index, and fuzzysort is
+10-19x faster. uFuzzy scans without an index and is still 1.3-1.8x faster than
 seaq's index. Those gaps are real. MiniSearch and Lunr look up whole words.
 fuzzysort's snapshot only re-checks the previous matches when the query grows by
 a keystroke; seaq does that only with `fuzziness: 0`, because a typo-tolerant
 search can match items the previous query didn't.
 
-But look at seaq's absolute time: **0.57 ms per keystroke** on this machine
+But look at seaq's absolute time: **0.56 ms per keystroke** on this machine
 (Node.js on Apple Silicon), well under the 16 ms frame budget for 60fps UI.
 Slower devices will take longer, so measure on the ones you target.
 
@@ -256,9 +256,9 @@ of a firehose of garbage.
 
 | Query      | v1 time  | v1 results | v2 time  | v2 results | Speedup |
 |------------|----------|-----------:|----------|-----------:|--------:|
-| "san"      | 3.86 ms  |      1,894 | 2.99 ms  |      2,183 |    1.3x |
-| "new york" | 3.46 ms  |          3 | 2.25 ms  |          4 |    1.5x |
-| "los ang"  | 3.47 ms  |          5 | 2.07 ms  |         44 |    1.7x |
+| "san"      | 4.08 ms  |      1,894 | 3.04 ms  |      2,183 |    1.3x |
+| "new york" | 3.88 ms  |          3 | 2.25 ms  |          4 |    1.7x |
+| "los ang"  | 3.86 ms  |          5 | 2.33 ms  |         44 |    1.7x |
 
 The core scoring engine is 1.3-1.7x faster through pre-lowered targets, bitmask
 pre-filtering, and a quadratic miss penalty, while matching more: shorthand,
@@ -270,8 +270,8 @@ scores more matches for it.
 
 | Query  | v1 time  | v1 results | v2 time  | v2 results |
 |--------|----------|-----------:|----------|-----------:|
-| "san"  | 3.74 ms  |      1,894 | 2.48 ms  |         10 |
-| "na"   | 4.28 ms  |      4,808 | 2.93 ms  |         10 |
+| "san"  | 4.13 ms  |      1,894 | 2.70 ms  |         10 |
+| "na"   | 4.67 ms  |      4,808 | 3.02 ms  |         10 |
 
 v1 scored and sorted every item, then you called `.slice(0, 10)` to get the top
 results. A query like "nath" on 10K contacts returned 9,756 results -- 97.5%

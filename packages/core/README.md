@@ -95,7 +95,7 @@ seaq(['Hillsdale Michigan', 'Historical Museum'], 'HiMi');
 
 ### Cross-field matching
 
-The default `joined` field mode concatenates field values before scoring, so queries can span fields:
+An item's values are joined with spaces and scored as one string, so queries can span fields:
 
 ```typescript
 seaq(contacts, 'john smith', { keys: ['firstName', 'lastName'] });
@@ -119,7 +119,7 @@ Highlight ranges are inclusive JavaScript (UTF-16) offsets. They never split a c
 
 ### Match highlighting
 
-Set `includeMatches: true` to get character-level match positions for building highlighted search results. Matches are reported per field in both field modes -- each entry names the `key` that matched and gives `indices` relative to that field's value:
+Set `includeMatches: true` to get character-level match positions for building highlighted search results. Matches are reported per field value -- each entry names the `key` that matched and gives `indices` relative to that value:
 
 ```typescript
 const results = seaq(contacts, 'john smith', {
@@ -136,17 +136,18 @@ const results = seaq(contacts, 'john smith', {
 // }]
 ```
 
-Match positions are only computed for the returned results. In the benchmark (an unindexed search of 10K contacts, top 10 results), `includeMatches` cost under 5% (see [BENCHMARKS.md](https://github.com/billie-coop/seaq/blob/main/BENCHMARKS.md#includematches-overhead)); with more results returned, it costs more.
+Match positions are only computed for the returned results. In the benchmark (an unindexed search of 10K contacts, top 10 results), `includeMatches` had no measurable cost (see [BENCHMARKS.md](https://github.com/billie-coop/seaq/blob/main/BENCHMARKS.md#includematches-overhead)); with more results returned, it costs more.
 
 ### Repeated searches (typeahead)
 
 You don't set anything up for a search box. The first search of an array just scans it. The second search of the same array builds an index, and later searches reuse it:
 
-- **Some items are ruled out without scoring.** The index records which character classes each item contains: one per letter a–z, five for digits, and one shared by everything else (all non-ASCII characters included). Strict searches (`fuzziness: 0`) skip items missing a class the query uses. Fuzzy searches skip items whose missing classes cap their score below what's already in the top results. The classes can't tell non-ASCII characters apart, so for other scripts the index rules out much less, and the numbers below (English names) don't carry over.
+- **Items are prepared once.** The index keeps each item's search string, lowercased, with the character classes it contains: one per letter a–z, five for digits, and one shared by everything else (all non-ASCII characters included).
+- **Some items are ruled out without scoring.** Strict searches (`fuzziness: 0`) skip items missing a class the query uses. Fuzzy searches skip items whose missing classes cap their score below what's already in the top results. The classes can't tell non-ASCII characters apart, so for other scripts this rules out much less, and the numbers below (English names) don't carry over.
 - **Typing gets cheaper.** In strict mode, when the query extends the previous one ("nat" → "nata"), only the previous matches are re-checked.
 - **Results are identical** to a search without the index.
 
-In the benchmark on 10K contacts, a default search for `"nath fe"` took 2.3 ms without the index and 0.38 ms with it; with `fuzziness: 0` it took 15 µs. Building the index and searching cost about the same as one search without it. The index used about 1 MB of memory per 10K contacts.
+In the benchmark on 10K contacts, a default search for `"nath fe"` took 2.3 ms without the index and 0.37 ms with it; with `fuzziness: 0` it took 27 µs. Building the index and searching cost no more than one search without it. The index used about 1.3 MB of memory per 10K contacts.
 
 The index is keyed on the array in a `WeakMap`, so it's garbage-collected with the list. Adding, removing or replacing items is detected automatically. **Mutating an item in place is not detected** once the array is indexed: replace the object (`list[i] = { ...item, name }`), or pass `cache: false`. A new array each render (e.g. `items.filter(...)`) is a new list, so it's scanned like any first search.
 
@@ -156,8 +157,6 @@ Control it with the `cache` option:
 seaq(list, query, { cache: true });  // index on the first search
 seaq(list, query, { cache: false }); // never index; always re-read the items
 ```
-
-In `fieldMode: 'separate'` there is no index; `cache: true` caches prepared strings per item instead, and by default nothing is cached.
 
 ## API
 
@@ -172,9 +171,8 @@ Returns a new array of matching items sorted by relevance (highest score first).
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `keys` | `string[]` | -- | Fields to search. Supports dot notation for nested properties (`'address.city'`) and automatic array traversal (`'emails.address'`). Omit when searching a plain `string[]`; without `keys`, non-string items are matched against their JSON representation. |
+| `keys` | `string[]` | -- | Fields to search. Supports dot notation for nested properties (`'address.city'`) and automatic array traversal (`'emails.address'`). An item's values are joined with spaces and searched as one string. Omit when searching a plain `string[]`; without `keys`, non-string items are matched against their JSON representation. |
 | `fuzziness` | `number` | `0.2` | Tolerance for query characters that can't be matched in order (typos, extra letters like `johnn` for `john`), from 0 to 1 (clamped). `0.2` = light typo tolerance: unmatched characters are allowed and scored lower. `0` = every query character must be matched (fastest). `0.5` = moderate. `0.8`+ = very loose. Shorthand (`steplau`), acronyms, adjacent swaps (`laguht`) and any word order match at every setting. |
-| `fieldMode` | `'joined' \| 'separate'` | `'joined'` | `'joined'` concatenates all field values into one string before scoring -- supports cross-field queries like "john smith" matching firstName + lastName. `'separate'` scores each field value on its own and keeps the best; different query words can still match different fields, but one word can't span two. Ignored for plain string arrays. |
 | `limit` | `number` | `10` | Maximum results to return. Uses a min-heap internally for O(n log k) selection, faster than full-sorting then slicing. Set to `Infinity` to return all matches; `0` or negative returns `[]`. |
 | `threshold` | `number` | `0.3` | Relative score cutoff. Results scoring below `topScore * threshold` are dropped. `0` = no filtering (return everything with score > 0). `1` = only results tied with the best score, however low it is. Note: higher = stricter -- the opposite polarity of Fuse.js's `threshold`. |
 | `includeMatches` | `boolean` | `false` | When `true`, returns `SeaqResult<T>` objects with per-field match metadata (character positions, matched value, per-match score) instead of plain items. |
@@ -190,10 +188,10 @@ interface SeaqResult<T> {
 }
 
 interface SeaqMatch {
-  key?: string;      // Field key (set in both field modes; undefined for plain string/number items)
+  key?: string;      // Field key (undefined without keys)
   value: string;     // The field value that was scored; indices are relative to it
   indices: [number, number][];  // Highlight ranges as [start, end] pairs (inclusive)
-  score: number;     // Per-field score in separate mode; the overall item score in joined mode
+  score: number;     // The item's score
 }
 ```
 

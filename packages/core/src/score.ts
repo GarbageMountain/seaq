@@ -341,11 +341,6 @@ function sortUnique(list: number[]): void {
   list.length = n;
 }
 
-/** Would `lowerWord` match `lower` with fuzziness 0? */
-export function matchesStrict(lower: string, lowerWord: string): boolean {
-  return align(earliest, false, lower, lower, lowerWord, lowerWord, false, false);
-}
-
 /**
  * Tables for an upper bound on {@link scoreString} for `plan` in fuzzy
  * mode, from a target's {@link charMask} and length ({@link scoreBound}): a

@@ -33,7 +33,6 @@ const emptyCustomDataset: DatasetConfig = {
 
 export interface SeaqConfig {
   fuzziness: number;
-  fieldMode: 'joined' | 'separate';
   limit: number | undefined;
   threshold: number;
   /** 'auto' = the library default (index from the second search). */
@@ -95,7 +94,7 @@ export interface EngineConfigs {
 }
 
 export const defaultConfigs: EngineConfigs = {
-  seaq: { fuzziness: 0.2, fieldMode: 'joined', limit: 10, threshold: 0.3, cache: 'auto' },
+  seaq: { fuzziness: 0.2, limit: 10, threshold: 0.3, cache: 'auto' },
   seaqv1: { fuzziness: 0.2 },
   fuzzysort: { threshold: 0.5, limit: 10, preIndexed: true },
   fuse: {

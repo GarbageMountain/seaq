@@ -1,5 +1,5 @@
 /**
- * The list index (cache: true in joined mode / keyless lists) must return
+ * The list index (cache: true) must return
  * exactly what the unindexed scan returns — same items, same order, same
  * match metadata — for every option combination.
  */
@@ -179,13 +179,5 @@ describe('default caching', () => {
     // Replacing the object is detected
     list[1] = { ...(list[1] as Contact) };
     expect(seaq(list, 'zelda', { keys })[0]).toBe(list[1]);
-  });
-
-  test('separate mode does not cache by default', () => {
-    const list = contacts.slice(0, 50).map((c) => ({ ...c }));
-    seaq(list, 'zz', { keys, fieldMode: 'separate' });
-    seaq(list, 'zz', { keys, fieldMode: 'separate' });
-    (list[2] as Contact).givenName = 'Zelda';
-    expect(seaq(list, 'zelda', { keys, fieldMode: 'separate' })[0]).toBe(list[2]);
   });
 });

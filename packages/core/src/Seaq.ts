@@ -1,12 +1,5 @@
 import { type Scored, scoreIndexed } from './listIndex';
-import {
-  charMask,
-  lowercase,
-  matchesStrict,
-  planQuery,
-  type QueryPlan,
-  scoreString,
-} from './score';
+import { charMask, lowercase, planQuery, type QueryPlan, scoreString } from './score';
 
 export interface SeaqMatch {
   /** The key that matched; `undefined` without `keys`. */
@@ -15,7 +8,7 @@ export interface SeaqMatch {
   value: string;
   /** Highlight ranges as inclusive `[start, end]` UTF-16 offsets. */
   indices: [number, number][];
-  /** The field's own score in `separate` mode, the item's score in `joined` mode. */
+  /** The item's score. */
   score: number;
 }
 
@@ -28,8 +21,9 @@ export interface SeaqResult<T> {
 export interface SeaqOptions<T> {
   /**
    * Keys to search, with dot paths (`'address.city'`) that walk into arrays at
-   * any level. Without `keys`, strings are searched as they are and other
-   * items as JSON; `null` and `undefined` never match.
+   * any level. An item's values are searched as one space-separated string,
+   * so a query can span fields. Without `keys`, strings are searched as they
+   * are and other items as JSON; `null` and `undefined` never match.
    */
   keys?: Array<Extract<keyof T, string>> | string[];
   /**
@@ -38,13 +32,6 @@ export interface SeaqOptions<T> {
    * character.
    */
   fuzziness?: number;
-  /**
-   * `'joined'` (default) scores all of an item's values as one
-   * space-separated string, so one word can span fields ("helgre" → Helen
-   * Green). `'separate'` scores each value on its own; different words can
-   * still match different fields.
-   */
-  fieldMode?: 'joined' | 'separate';
   /** Maximum results, default `10`. `Infinity` returns every match. */
   limit?: number;
   /**
@@ -58,8 +45,7 @@ export interface SeaqOptions<T> {
   /**
    * Default: an array is indexed on its second search. `true` indexes on the
    * first, `false` never. Replaced items are detected, items **mutated in
-   * place are not**. In `separate` mode, `true` caches prepared values per
-   * item instead.
+   * place are not**.
    */
   cache?: boolean;
 }
@@ -85,7 +71,6 @@ export function seaq<T>(
   const rawFuzziness = options?.fuzziness ?? 0.2;
   // Above 1, the miss penalty would turn into a bonus
   const fuzziness = rawFuzziness < 0 ? 0 : rawFuzziness > 1 ? 1 : rawFuzziness;
-  const separate = keys !== undefined && options?.fieldMode === 'separate';
   const limit = options?.limit ?? 10;
   const threshold = options?.threshold ?? 0.3;
   const cache = options?.cache;
@@ -99,11 +84,9 @@ export function seaq<T>(
     : keylessString;
 
   const { items: scored, maxScore } =
-    paths && separate
-      ? scoreSeparate(list, plan, paths, fuzziness, cache === true)
-      : (cache ?? searchedBefore(list))
-        ? scoreIndexed(list, plan, fuzziness, limit, threshold, JSON.stringify(keys) ?? '', prep)
-        : scoreScan(list, plan, fuzziness, prep, paths !== undefined);
+    (cache ?? searchedBefore(list))
+      ? scoreIndexed(list, plan, fuzziness, limit, threshold, JSON.stringify(keys) ?? '', prep)
+      : scoreScan(list, plan, fuzziness, prep, paths !== undefined);
 
   const sorted = getTopN(scored, limit, maxScore * threshold);
   if (!options?.includeMatches) return sorted.map((m) => m.item);
@@ -112,9 +95,7 @@ export function seaq<T>(
     item,
     score,
     matches: paths
-      ? separate
-        ? separateMatches(item, plan, paths, fuzziness)
-        : joinedMatches(item, plan, paths, fuzziness, score)
+      ? joinedMatches(item, plan, paths, fuzziness, score)
       : [singleMatch(keylessString(item), plan, fuzziness, score)],
   }));
 }
@@ -134,7 +115,7 @@ function searchedBefore(list: object): boolean {
 }
 
 /**
- * Joined mode or keyless, without an index. Strict searches with keys skip
+ * Without an index. Strict searches with keys skip
  * items missing a query character class before scoring. Without keys,
  * objects are long JSON strings, and building their mask measured slower
  * than letting the scorer reject them.
@@ -243,18 +224,10 @@ function heapifyDown(heap: number[], worse: Worse): void {
 }
 
 /** Only called for values that scored > 0, so some position is found. */
-function singleMatch(
-  value: string,
-  plan: QueryPlan,
-  fuzziness: number,
-  score: number | null,
-  key?: string,
-): SeaqMatch {
+function singleMatch(value: string, plan: QueryPlan, fuzziness: number, score: number): SeaqMatch {
   const positions: number[] = [];
-  const s = scoreString(plan, value, lowercase(value), -1, fuzziness, positions);
-  const match: SeaqMatch = { value, indices: positionsToRanges(positions), score: score ?? s };
-  if (key !== undefined) match.key = key;
-  return match;
+  scoreString(plan, value, lowercase(value), -1, fuzziness, positions);
+  return { value, indices: positionsToRanges(positions), score };
 }
 
 /** Ascending, non-empty positions as inclusive [start, end] ranges. */
@@ -317,179 +290,6 @@ function joinedMatches(
     start = end + 1;
   }
   return matches;
-}
-
-interface Field {
-  key: string;
-  values: string[];
-  lowers: string[];
-  masks: number[];
-}
-
-function prepareFields(item: unknown, paths: KeyPath[]): Field[] {
-  const fields: Field[] = [];
-  for (const { key, path } of paths) {
-    const values = collectValues(item, path, 0, []);
-    const lowers: string[] = [];
-    const masks: number[] = [];
-    for (const value of values) {
-      const lower = lowercase(value);
-      lowers.push(lower);
-      masks.push(charMask(lower));
-    }
-    fields.push({ key, values, lowers, masks });
-  }
-  return fields;
-}
-
-/** Prepared fields cached per item (`cache: true`), then per keys. */
-const fieldCache = new WeakMap<object, Map<string, Field[]>>();
-
-function scoreSeparate<T>(
-  list: T[],
-  plan: QueryPlan,
-  paths: KeyPath[],
-  fuzziness: number,
-  useCache: boolean,
-): { items: Scored<T>[]; maxScore: number } {
-  const wordPlans = plan.words.length > 1 ? plan.words.map(planQuery) : null;
-  const signature = JSON.stringify(paths.map((p) => p.key));
-  const items: Scored<T>[] = [];
-  let maxScore = 0;
-
-  for (const item of list) {
-    if (item === null || item === undefined) continue;
-
-    let fields: Field[] | undefined;
-    let byKeys: Map<string, Field[]> | undefined;
-    if (useCache && typeof item === 'object') {
-      byKeys = fieldCache.get(item);
-      if (!byKeys) {
-        byKeys = new Map();
-        fieldCache.set(item, byKeys);
-      }
-      fields = byKeys.get(signature);
-    }
-    if (!fields) {
-      fields = prepareFields(item, paths);
-      byKeys?.set(signature, fields);
-    }
-
-    const score = scoreFields(fields, plan, wordPlans, fuzziness, null);
-    if (score > 0) {
-      if (score > maxScore) maxScore = score;
-      items.push({ item, score });
-    }
-  }
-  return { items, maxScore };
-}
-
-function separateMatches(
-  item: unknown,
-  plan: QueryPlan,
-  paths: KeyPath[],
-  fuzziness: number,
-): SeaqMatch[] {
-  const wordPlans = plan.words.length > 1 ? plan.words.map(planQuery) : null;
-  const matches: SeaqMatch[] = [];
-  scoreFields(prepareFields(item, paths), plan, wordPlans, fuzziness, matches);
-  return matches;
-}
-
-/**
- * Score one item's fields in separate mode: the best score of the whole
- * query against any one value, or for multi-word queries the average of
- * each word's best value score when that's higher ("john smith" across
- * firstName and lastName). With `matches` (only for results), the winning
- * values are added with highlight positions.
- */
-function scoreFields(
-  fields: Field[],
-  plan: QueryPlan,
-  wordPlans: QueryPlan[] | null,
-  fuzziness: number,
-  matches: SeaqMatch[] | null,
-): number {
-  let whole = 0;
-  let wholeField = 0;
-  let wholeValue = 0;
-  for (let fi = 0; fi < fields.length; fi++) {
-    const { values, lowers, masks } = fields[fi]!;
-    for (let vi = 0; vi < values.length; vi++) {
-      const mask = masks[vi]!;
-      // Bitmask gate. Strict: a query class is missing. Fuzzy: no overlap.
-      if (fuzziness ? (plan.mask & mask) === 0 : (plan.mask & ~mask) !== 0) continue;
-      const s = scoreString(plan, values[vi]!, lowers[vi]!, -1, fuzziness);
-      if (s > whole) {
-        whole = s;
-        wholeField = fi;
-        wholeValue = vi;
-      }
-    }
-  }
-
-  // Each word against each value, keeping each word's best, when every word
-  // matches some value strictly
-  if (wordPlans !== null && whole < 1 && everyWordMatches(fields, wordPlans)) {
-    const n = wordPlans.length;
-    // [field, value] of each word's best, for highlights
-    const wins: number[] | null = matches ? [] : null;
-    let sum = 0;
-    let w = 0;
-    for (; w < n; w++) {
-      const wp = wordPlans[w]!;
-      let best = 0;
-      for (let fi = 0; fi < fields.length; fi++) {
-        const { values, lowers, masks } = fields[fi]!;
-        for (let vi = 0; vi < values.length; vi++) {
-          const mask = masks[vi]!;
-          if (fuzziness ? (wp.mask & mask) === 0 : (wp.mask & ~mask) !== 0) continue;
-          const s = scoreString(wp, values[vi]!, lowers[vi]!, -1, fuzziness);
-          if (s > best) {
-            best = s;
-            if (wins) {
-              wins[2 * w] = fi;
-              wins[2 * w + 1] = vi;
-            }
-          }
-        }
-      }
-      sum += best;
-      // Give up once even perfect scores for the remaining words can't win
-      if ((sum + n - w - 1) / n <= whole) break;
-    }
-    if (w === n) {
-      if (matches && wins) {
-        for (let i = 0; i < n; i++) {
-          const field = fields[wins[2 * i]!]!;
-          const value = field.values[wins[2 * i + 1]!]!;
-          matches.push(singleMatch(value, wordPlans[i]!, fuzziness, null, field.key));
-        }
-      }
-      return sum / n;
-    }
-  }
-
-  if (matches) {
-    const field = fields[wholeField]!;
-    matches.push(singleMatch(field.values[wholeValue]!, plan, fuzziness, null, field.key));
-  }
-  return whole;
-}
-
-function everyWordMatches(fields: Field[], wordPlans: QueryPlan[]): boolean {
-  for (const wp of wordPlans) {
-    const word = wp.lowerWords[0]!;
-    let found = false;
-    for (let fi = 0; fi < fields.length && !found; fi++) {
-      const { lowers, masks } = fields[fi]!;
-      for (let vi = 0; vi < lowers.length && !found; vi++) {
-        found = (wp.mask & ~masks[vi]!) === 0 && matchesStrict(lowers[vi]!, word);
-      }
-    }
-    if (!found) return false;
-  }
-  return true;
 }
 
 /** Skips null and undefined; objects are JSON. */

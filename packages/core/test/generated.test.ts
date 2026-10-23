@@ -278,16 +278,14 @@ describe('generated object lists', () => {
     ['first', 'tags', 'missing'],
   ];
 
-  test('every key set, in both field modes, indexed and not; configuration changes', () => {
+  test('every key set, indexed and not; configuration changes', () => {
     for (let round = 0; round < 60; round++) {
       const list = Array.from({ length: 30 }, randomPerson);
       for (let k = 0; k < 10; k++) {
         const keys = pick(keySets);
-        const fieldMode = pick(['joined', 'separate'] as const);
         const query = randomQuery(randomText());
         const options: SeaqOptions<unknown> = {
           keys,
-          fieldMode,
           fuzziness: pick(fuzzinesses),
           limit: pick(limits),
           threshold: pick(thresholds),
